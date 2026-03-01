@@ -1,0 +1,706 @@
+"""
+Abstract codebase loader for the security graph.
+
+Discovers files, classes, and functions/methods within a local directory
+and transforms them into graph Nodes and Edges. Concrete subclasses
+provide URN construction via build_urn().
+
+AST analysis uses ast-grep-py for multi-language structural extraction.
+"""
+
+from __future__ import annotations
+
+import abc
+import logging
+import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING, Callable
+
+from ast_grep_py import SgRoot
+
+from src.graph.graph_models import (
+    Edge,
+    Node,
+    NodeMetadata,
+    NodeMetadataKey,
+    RelationType,
+    URN,
+)
+from src.graph.loaders._helpers import make_edge
+from src.graph.loaders.codebase.plugins._base import CodebasePlugin
+from src.graph.loaders.loader import ConceptLoader
+
+if TYPE_CHECKING:
+    from src.graph.loaders.codebase.resolvers._base import LanguageAnalyzer
+
+logger = logging.getLogger(__name__)
+
+
+# ── Post-processing context ─────────────────────────────────────────
+
+
+@dataclass
+class PostProcessContext:
+    """State accumulated during scanning, available for post-processing.
+
+    This is a core loader concept — resolvers and plugins both receive it.
+    """
+
+    root_path: Path
+    root_name: str
+    organization_id: uuid.UUID
+    file_sources: dict[str, str]
+    """Mapping of rel_path → source text for every scanned file."""
+    file_languages: dict[str, str]
+    """Mapping of rel_path → ast-grep language name."""
+    build_urn: Callable[..., URN]
+    """The loader's build_urn method for constructing URNs."""
+
+# ── File extension → ast-grep language mapping ───────────────────────
+
+EXTENSION_TO_LANGUAGE: dict[str, str] = {
+    ".py": "python",
+    ".js": "javascript",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".jsx": "javascript",
+    ".java": "java",
+    ".go": "go",
+    ".rb": "ruby",
+    ".rs": "rust",
+    ".kt": "kotlin",
+    ".scala": "scala",
+    ".cs": "c_sharp",
+    ".c": "c",
+    ".cpp": "cpp",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".swift": "swift",
+    ".sql": "sql",
+}
+
+# ── Directories to always skip ───────────────────────────────────────
+
+DEFAULT_EXCLUDE_DIRS: set[str] = {
+    "node_modules",
+    "vendor",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".git",
+    "dist",
+    "build",
+    "target",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "egg-info",
+}
+
+
+# ── Per-language AST extraction config ───────────────────────────────
+
+
+@dataclass
+class LanguageConfig:
+    """How to extract classes and functions from a given language's AST."""
+
+    class_kinds: list[str]
+    function_kinds: list[str]
+    # AST kinds that wrap definitions (e.g. decorated_definition in Python).
+    # Maps wrapper kind → field name containing the inner definition.
+    wrapper_kinds: dict[str, str] = field(default_factory=dict)
+
+
+LANGUAGE_CONFIGS: dict[str, LanguageConfig] = {
+    "python": LanguageConfig(
+        class_kinds=["class_definition"],
+        function_kinds=["function_definition"],
+        wrapper_kinds={"decorated_definition": "definition"},
+    ),
+    "javascript": LanguageConfig(
+        class_kinds=["class_declaration"],
+        function_kinds=["function_declaration", "method_definition"],
+    ),
+    "typescript": LanguageConfig(
+        class_kinds=["class_declaration"],
+        function_kinds=["function_declaration", "method_definition"],
+    ),
+    "tsx": LanguageConfig(
+        class_kinds=["class_declaration"],
+        function_kinds=["function_declaration", "method_definition"],
+    ),
+    "java": LanguageConfig(
+        class_kinds=["class_declaration", "interface_declaration"],
+        function_kinds=["method_declaration"],
+    ),
+    "go": LanguageConfig(
+        class_kinds=[],  # Go structs handled separately
+        function_kinds=["function_declaration", "method_declaration"],
+    ),
+}
+
+
+class CodebaseLoader(ConceptLoader, abc.ABC):
+    """Abstract codebase loader.
+
+    Implements ``load()`` using ast-grep to discover files, classes,
+    and functions/methods and produce graph Nodes and Edges.  The
+    ``build_urn()`` method remains abstract so concrete subclasses can
+    define provider-specific URN schemes (GitHub vs on-prem vs Bitbucket).
+    """
+
+    def __init__(
+        self,
+        organization_id,
+        *,
+        exclude_dirs: set[str] | None = None,
+        plugins: list[CodebasePlugin] | None = None,
+    ):
+        super().__init__(organization_id)
+        self._exclude_dirs = exclude_dirs or DEFAULT_EXCLUDE_DIRS
+        self._plugins = plugins or []
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def load(self, resource: str) -> tuple[list[Node], list[Edge]]:
+        """Discover nodes and edges from a local directory.
+
+        Args:
+            resource: Path to the local directory to scan.
+
+        Returns:
+            A tuple of (nodes, edges) discovered from the codebase.
+        """
+        root_path = Path(resource)
+        root_name = self._get_root_name(resource)
+
+        files = self._enumerate_files(root_path)
+
+        nodes: list[Node] = []
+        edges: list[Edge] = []
+        file_sources: dict[str, str] = {}
+        file_languages: dict[str, str] = {}
+
+        # Codebase root node
+        codebase_urn = self.build_urn(root_name)
+        nodes.append(self._build_codebase_node(codebase_urn, root_name, len(files)))
+
+        # Phase 1: Structural extraction
+        for file_path in files:
+            rel_path = str(file_path.relative_to(root_path))
+            language = self._detect_language(file_path)
+
+            file_urn = self.build_urn(root_name, rel_path)
+            nodes.append(Node(
+                organization_id=self.organization_id,
+                urn=file_urn,
+                parent_urn=codebase_urn,
+                metadata=NodeMetadata({
+                    NodeMetadataKey.FILE_PATH: rel_path,
+                    NodeMetadataKey.LANGUAGE: language or "unknown",
+                    NodeMetadataKey.SIZE_BYTES: file_path.stat().st_size,
+                }),
+            ))
+            edges.append(make_edge(
+                self.organization_id, codebase_urn, file_urn, RelationType.CONTAINS,
+            ))
+
+            # AST analysis for supported languages
+            if language and language in LANGUAGE_CONFIGS:
+                file_nodes, file_edges, source = self._analyze_file(
+                    file_path, language, file_urn, root_name, rel_path,
+                )
+                nodes.extend(file_nodes)
+                edges.extend(file_edges)
+                if source is not None:
+                    file_sources[rel_path] = source
+                    file_languages[rel_path] = language
+
+        logger.info(
+            "Structural extraction: %d nodes, %d edges from %s",
+            len(nodes), len(edges), root_name,
+        )
+
+        # Phase 2: Post-processing (resolvers + plugins)
+        ctx = PostProcessContext(
+            root_path=root_path.resolve(),
+            root_name=root_name,
+            organization_id=self.organization_id,
+            file_sources=file_sources,
+            file_languages=file_languages,
+            build_urn=self.build_urn,
+        )
+
+        # 2a. Language analysis (import resolution, call graph)
+        nodes, edges = self._run_language_analysis(nodes, edges, ctx)
+
+        # 2b. Plugin post-processing (domain-specific enrichment)
+        for plugin in self._plugins:
+            nodes, edges = plugin.post_process(nodes, edges, ctx)
+
+        logger.info(
+            "After post-processing: %d nodes, %d edges from %s",
+            len(nodes), len(edges), root_name,
+        )
+
+        return nodes, edges
+
+    # ------------------------------------------------------------------
+    # Overridable hooks
+    # ------------------------------------------------------------------
+
+    def _get_root_name(self, resource: str) -> str:
+        """Return the name used as the first URN path segment.
+
+        Override in subclasses that know the canonical name (e.g. GitHub
+        repo name) rather than relying on the local directory name.
+        """
+        return Path(resource).name
+
+    def _build_codebase_node(
+        self,
+        codebase_urn: URN,
+        root_name: str,
+        file_count: int,
+    ) -> Node:
+        """Build the codebase root node.
+
+        Override in subclasses to add provider-specific metadata
+        (e.g. scanned_commit, default_branch, visibility).
+        """
+        return Node(
+            organization_id=self.organization_id,
+            urn=codebase_urn,
+            parent_urn=None,
+            metadata=NodeMetadata({
+                NodeMetadataKey.REPO_NAME: root_name,
+                NodeMetadataKey.FILE_COUNT: file_count,
+            }),
+        )
+
+    # ------------------------------------------------------------------
+    # Post-processing: language analysis
+    # ------------------------------------------------------------------
+
+    def _run_language_analysis(
+        self,
+        nodes: list[Node],
+        edges: list[Edge],
+        ctx: PostProcessContext,
+    ) -> tuple[list[Node], list[Edge]]:
+        """Run language-specific analyzers (import resolution, call graph).
+
+        Groups files by language, looks up the LanguageAnalyzer for each,
+        and delegates cross-file analysis.
+        """
+        from src.graph.loaders.codebase.resolvers import LANGUAGE_ANALYZERS
+
+        # Group files by language
+        files_by_lang: dict[str, dict[str, str]] = {}
+        for rel_path, lang in ctx.file_languages.items():
+            files_by_lang.setdefault(lang, {})[rel_path] = ctx.file_sources[rel_path]
+
+        for lang, sources in files_by_lang.items():
+            analyzer = LANGUAGE_ANALYZERS.get(lang)
+            if not analyzer:
+                continue
+            new_nodes, new_edges = analyzer.analyze(nodes, edges, sources, ctx)
+            nodes = new_nodes
+            edges = new_edges
+
+        return nodes, edges
+
+    # ------------------------------------------------------------------
+    # File enumeration
+    # ------------------------------------------------------------------
+
+    def _enumerate_files(self, root_path: Path) -> list[Path]:
+        """Walk the directory tree and return parseable files."""
+        files: list[Path] = []
+        for path in sorted(root_path.rglob("*")):
+            if not path.is_file():
+                continue
+            # Skip excluded directories
+            if any(part in self._exclude_dirs for part in path.relative_to(root_path).parts):
+                continue
+            # Only include files with recognized extensions
+            if path.suffix in EXTENSION_TO_LANGUAGE:
+                files.append(path)
+        return files
+
+    # ------------------------------------------------------------------
+    # Language detection
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _detect_language(file_path: Path) -> str | None:
+        """Map file extension to ast-grep language name."""
+        return EXTENSION_TO_LANGUAGE.get(file_path.suffix)
+
+    # ------------------------------------------------------------------
+    # AST analysis
+    # ------------------------------------------------------------------
+
+    def _analyze_file(
+        self,
+        file_path: Path,
+        language: str,
+        file_urn: URN,
+        root_name: str,
+        rel_path: str,
+    ) -> tuple[list[Node], list[Edge], str | None]:
+        """Parse a file and extract class/function nodes with CONTAINS edges.
+
+        Returns:
+            (nodes, edges, source_text) — source_text is None if unreadable.
+        """
+        try:
+            source = file_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            logger.warning("Could not read %s, skipping AST analysis", file_path)
+            return [], [], None
+
+        if not source.strip():
+            return [], [], source
+
+        try:
+            root = SgRoot(source, language)
+            ast_root = root.root()
+        except Exception:
+            logger.warning("Could not parse %s as %s", file_path, language)
+            return [], [], source
+
+        config = LANGUAGE_CONFIGS[language]
+
+        # For Go, handle struct types + top-level functions specially
+        if language == "go":
+            nodes, edges = self._analyze_go_file(
+                ast_root, file_urn, root_name, rel_path, source,
+            )
+            return nodes, edges, source
+
+        nodes, edges = self._extract_from_scope(
+            ast_root, config, file_urn, root_name, rel_path, [], language,
+        )
+        return nodes, edges, source
+
+    def _extract_from_scope(
+        self,
+        scope_node,
+        config: LanguageConfig,
+        parent_urn: URN,
+        root_name: str,
+        rel_path: str,
+        name_chain: list[str],
+        language: str = "",
+    ) -> tuple[list[Node], list[Edge]]:
+        """Recursively extract classes and functions from an AST scope.
+
+        Args:
+            scope_node: The AST node representing the current scope
+                        (module, class body, etc.).
+            config: Language-specific extraction config.
+            parent_urn: URN of the parent node (file or class).
+            root_name: Repository/codebase root name.
+            rel_path: Relative file path from repo root.
+            name_chain: Stack of enclosing class/function names for
+                        nested definitions.
+            language: The ast-grep language name (e.g. "python").
+        """
+        nodes: list[Node] = []
+        edges: list[Edge] = []
+
+        # Track names for ordinal-based disambiguation of overloads
+        name_counts: dict[str, int] = {}
+
+        for child in scope_node.children():
+            # Unwrap decorator/annotation wrappers
+            actual = self._unwrap_node(child, config)
+            kind = actual.kind()
+
+            if kind in config.class_kinds:
+                name_node = actual.field("name")
+                if not name_node:
+                    continue
+                class_name = name_node.text()
+
+                urn_segments = [root_name, rel_path] + name_chain + [class_name]
+                class_urn = self.build_urn(*urn_segments)
+
+                r = actual.range()
+                base_classes = self._extract_base_classes(actual)
+
+                meta = NodeMetadata({
+                    NodeMetadataKey.CLASS_NAME: class_name,
+                    NodeMetadataKey.FILE_PATH: rel_path,
+                    NodeMetadataKey.START_LINE: r.start.line,
+                    NodeMetadataKey.END_LINE: r.end.line,
+                })
+                if base_classes:
+                    meta[NodeMetadataKey.BASE_CLASSES] = base_classes
+
+                class_node = Node(
+                    organization_id=self.organization_id,
+                    urn=class_urn,
+                    parent_urn=parent_urn,
+                    metadata=meta,
+                )
+
+                # Run plugins on class node
+                body = actual.field("body")
+                body_source = body.text() if body else ""
+                for plugin in self._plugins:
+                    class_node = plugin.on_class_node(class_node, body_source, language)
+
+                nodes.append(class_node)
+                edges.append(make_edge(
+                    self.organization_id, parent_urn, class_urn, RelationType.CONTAINS,
+                ))
+
+                # Recurse into class body
+                if body:
+                    sub_nodes, sub_edges = self._extract_from_scope(
+                        body, config, class_urn, root_name, rel_path,
+                        name_chain + [class_name], language,
+                    )
+                    nodes.extend(sub_nodes)
+                    edges.extend(sub_edges)
+
+            elif kind in config.function_kinds:
+                name_node = actual.field("name")
+                if not name_node:
+                    continue
+                func_name = name_node.text()
+
+                # Disambiguate overloaded names
+                display_name = self._disambiguate_name(func_name, name_counts)
+
+                urn_segments = [root_name, rel_path] + name_chain + [display_name]
+                func_urn = self.build_urn(*urn_segments)
+
+                r = actual.range()
+                is_method = len(name_chain) > 0
+
+                func_node = Node(
+                    organization_id=self.organization_id,
+                    urn=func_urn,
+                    parent_urn=parent_urn,
+                    metadata=NodeMetadata({
+                        NodeMetadataKey.FUNCTION_NAME: func_name,
+                        NodeMetadataKey.FILE_PATH: rel_path,
+                        NodeMetadataKey.START_LINE: r.start.line,
+                        NodeMetadataKey.END_LINE: r.end.line,
+                        NodeMetadataKey.IS_METHOD: is_method,
+                    }),
+                )
+
+                # Run plugins on function node (child.text() includes decorators)
+                func_source = child.text()
+                for plugin in self._plugins:
+                    func_node = plugin.on_function_node(func_node, func_source, language)
+
+                nodes.append(func_node)
+                edges.append(make_edge(
+                    self.organization_id, parent_urn, func_urn, RelationType.CONTAINS,
+                ))
+
+        return nodes, edges
+
+    # ------------------------------------------------------------------
+    # Go-specific analysis
+    # ------------------------------------------------------------------
+
+    def _analyze_go_file(
+        self,
+        ast_root,
+        file_urn: URN,
+        root_name: str,
+        rel_path: str,
+        source: str,
+    ) -> tuple[list[Node], list[Edge]]:
+        """Extract structs and functions from a Go file.
+
+        Go methods are at the top level (not nested inside structs),
+        so we associate them with their receiver type.
+        """
+        nodes: list[Node] = []
+        edges: list[Edge] = []
+
+        # Discover struct types → treat as "classes"
+        struct_names: set[str] = set()
+        struct_urns: dict[str, URN] = {}
+
+        for child in ast_root.children():
+            if child.kind() == "type_declaration":
+                for spec in child.children():
+                    if spec.kind() == "type_spec":
+                        name_node = spec.field("name")
+                        type_node = spec.field("type")
+                        if name_node and type_node and type_node.kind() == "struct_type":
+                            struct_name = name_node.text()
+                            struct_names.add(struct_name)
+                            struct_urn = self.build_urn(root_name, rel_path, struct_name)
+                            struct_urns[struct_name] = struct_urn
+
+                            r = child.range()
+                            struct_node = Node(
+                                organization_id=self.organization_id,
+                                urn=struct_urn,
+                                parent_urn=file_urn,
+                                metadata=NodeMetadata({
+                                    NodeMetadataKey.CLASS_NAME: struct_name,
+                                    NodeMetadataKey.FILE_PATH: rel_path,
+                                    NodeMetadataKey.START_LINE: r.start.line,
+                                    NodeMetadataKey.END_LINE: r.end.line,
+                                }),
+                            )
+                            body_source = type_node.text() if type_node else ""
+                            for plugin in self._plugins:
+                                struct_node = plugin.on_class_node(struct_node, body_source, "go")
+                            nodes.append(struct_node)
+                            edges.append(make_edge(
+                                self.organization_id, file_urn, struct_urn,
+                                RelationType.CONTAINS,
+                            ))
+
+        # Discover functions and methods
+        for child in ast_root.children():
+            if child.kind() == "function_declaration":
+                name_node = child.field("name")
+                if not name_node:
+                    continue
+                func_name = name_node.text()
+                func_urn = self.build_urn(root_name, rel_path, func_name)
+
+                r = child.range()
+                go_func_node = Node(
+                    organization_id=self.organization_id,
+                    urn=func_urn,
+                    parent_urn=file_urn,
+                    metadata=NodeMetadata({
+                        NodeMetadataKey.FUNCTION_NAME: func_name,
+                        NodeMetadataKey.FILE_PATH: rel_path,
+                        NodeMetadataKey.START_LINE: r.start.line,
+                        NodeMetadataKey.END_LINE: r.end.line,
+                        NodeMetadataKey.IS_METHOD: False,
+                    }),
+                )
+                func_source = child.text()
+                for plugin in self._plugins:
+                    go_func_node = plugin.on_function_node(go_func_node, func_source, "go")
+                nodes.append(go_func_node)
+                edges.append(make_edge(
+                    self.organization_id, file_urn, func_urn, RelationType.CONTAINS,
+                ))
+
+            elif child.kind() == "method_declaration":
+                name_node = child.field("name")
+                if not name_node:
+                    continue
+                method_name = name_node.text()
+
+                # Extract receiver type to associate with struct
+                receiver_type = self._extract_go_receiver_type(child)
+                if receiver_type and receiver_type in struct_urns:
+                    method_parent_urn = struct_urns[receiver_type]
+                    method_urn = self.build_urn(
+                        root_name, rel_path, receiver_type, method_name,
+                    )
+                else:
+                    method_parent_urn = file_urn
+                    method_urn = self.build_urn(root_name, rel_path, method_name)
+
+                r = child.range()
+                meta = NodeMetadata({
+                    NodeMetadataKey.FUNCTION_NAME: method_name,
+                    NodeMetadataKey.FILE_PATH: rel_path,
+                    NodeMetadataKey.START_LINE: r.start.line,
+                    NodeMetadataKey.END_LINE: r.end.line,
+                    NodeMetadataKey.IS_METHOD: True,
+                })
+                if receiver_type:
+                    meta[NodeMetadataKey.RECEIVER_TYPE] = receiver_type
+
+                go_method_node = Node(
+                    organization_id=self.organization_id,
+                    urn=method_urn,
+                    parent_urn=method_parent_urn,
+                    metadata=meta,
+                )
+                method_source = child.text()
+                for plugin in self._plugins:
+                    go_method_node = plugin.on_function_node(go_method_node, method_source, "go")
+                nodes.append(go_method_node)
+                edges.append(make_edge(
+                    self.organization_id, method_parent_urn, method_urn,
+                    RelationType.CONTAINS,
+                ))
+
+        return nodes, edges
+
+    @staticmethod
+    def _extract_go_receiver_type(method_node) -> str | None:
+        """Extract the receiver type name from a Go method declaration."""
+        receiver = method_node.field("receiver")
+        if not receiver:
+            return None
+        # Walk through parameter_list → parameter_declaration → type
+        for param in receiver.children():
+            if param.kind() == "parameter_declaration":
+                type_node = param.field("type")
+                if type_node:
+                    # Handle pointer receivers: *User → User
+                    if type_node.kind() == "pointer_type":
+                        inner = type_node.children()
+                        for c in inner:
+                            if c.kind() == "type_identifier":
+                                return c.text()
+                    elif type_node.kind() == "type_identifier":
+                        return type_node.text()
+        return None
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _unwrap_node(node, config: LanguageConfig):
+        """Unwrap decorator/annotation wrappers to get the inner definition."""
+        kind = node.kind()
+        if kind in config.wrapper_kinds:
+            inner_field = config.wrapper_kinds[kind]
+            inner = node.field(inner_field)
+            if inner:
+                return inner
+        return node
+
+    @staticmethod
+    def _disambiguate_name(name: str, name_counts: dict[str, int]) -> str:
+        """Append ordinal suffix for duplicate names (e.g. overloaded methods)."""
+        if name in name_counts:
+            name_counts[name] += 1
+            return f"{name}__{name_counts[name]}"
+        name_counts[name] = 1
+        return name
+
+    @staticmethod
+    def _extract_base_classes(class_node) -> list[str]:
+        """Extract base class names from a class definition node."""
+        bases = []
+        # Python: argument_list contains base classes
+        arg_list = class_node.field("superclasses")
+        if arg_list:
+            for child in arg_list.children():
+                if child.is_named():
+                    bases.append(child.text())
+            return bases
+        # JS/TS/Java: class_heritage or superclass field
+        heritage = class_node.field("superclass")
+        if heritage:
+            bases.append(heritage.text())
+        return bases

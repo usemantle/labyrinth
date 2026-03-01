@@ -1,0 +1,49 @@
+"""
+Database discovery drivers.
+
+Provides a unified interface for database discovery across different
+database types (PostgreSQL, MySQL, etc.).
+
+Usage:
+    from src.drivers import BaseDiscoveryDriver
+    
+    # Get the appropriate driver for your datastore type
+    driver = BaseDiscoveryDriver.get_driver("POSTGRES", engine)
+    
+    # Use driver methods for discovery
+    schemas = driver.discover_schemas("mydb")
+    tables = driver.discover_tables("public")
+"""
+
+from src.drivers.base import BaseDiscoveryDriver, UnsupportedDatastoreError
+from src.drivers.models import (
+    SchemaMetadata,
+    TableMetadata,
+    ColumnMetadata,
+    ConstraintMetadata,
+    ForeignKeyMetadata,
+    IndexMetadata,
+    ComplianceQueryResult,
+    PKSelectQuery,
+)
+from src.drivers.postgres import PostgresDiscoveryDriver
+from src.drivers.mysql import MySQLDiscoveryDriver
+
+__all__ = [
+    # Base class
+    "BaseDiscoveryDriver",
+    "UnsupportedDatastoreError",
+    # Concrete drivers
+    "PostgresDiscoveryDriver",
+    "MySQLDiscoveryDriver",
+    # Discovery models
+    "SchemaMetadata",
+    "TableMetadata",
+    "ColumnMetadata",
+    "ConstraintMetadata",
+    "ForeignKeyMetadata",
+    "IndexMetadata",
+    # Compliance models
+    "ComplianceQueryResult",
+    "PKSelectQuery",
+]

@@ -1,0 +1,49 @@
+[project]
+name = "labyrinth"
+version = "0.1.0"
+description = "Security graph discovery library — discovers code, databases, and cloud resources and stitches them into a queryable graph"
+requires-python = ">=3.13"
+dependencies = [
+    "ast-grep-py>=0.31.1",
+    "boto3>=1.34.0",
+    "botocore>=1.34.0",
+    "networkx>=3.2",
+    "pydantic>=2.12.5",
+    "sqlalchemy>=2.0.44",
+    "mcp>=1.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0",
+    "ruff>=0.8.4",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+]
