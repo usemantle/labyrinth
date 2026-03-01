@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from src.drivers.models import (
+from src.drivers.sql.models import (
     SchemaMetadata,
     TableMetadata,
     ColumnMetadata,

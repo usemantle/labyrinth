@@ -17,8 +17,8 @@ from typing import ClassVar, List
 
 from sqlalchemy import text
 
-from src.drivers.base import BaseDiscoveryDriver
-from src.drivers.models import (
+from src.drivers.sql.base import BaseDiscoveryDriver
+from src.drivers.sql.models import (
     SchemaMetadata,
     TableMetadata,
     ColumnMetadata,

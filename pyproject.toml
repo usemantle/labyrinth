@@ -47,3 +47,9 @@ select = [
 ignore = [
     "E501",  # line too long (handled by formatter)
 ]
+
+[tool.pyrefly]
+project-includes = ["src"]
+search-path = ["."]
+python-platform = "linux"
+python-version = "3.13"

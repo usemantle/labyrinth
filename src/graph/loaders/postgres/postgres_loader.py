@@ -14,8 +14,8 @@ import uuid
 
 from sqlalchemy.engine.url import make_url
 
-from src.drivers.base import BaseDiscoveryDriver
-from src.drivers.models import ColumnMetadata
+from src.drivers.sql.base import BaseDiscoveryDriver
+from src.drivers.sql.models import ColumnMetadata
 from src.graph.graph_models import (
     Edge,
     EdgeMetadata,

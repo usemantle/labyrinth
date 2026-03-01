@@ -12,7 +12,7 @@ from typing import ClassVar, List, Optional, TYPE_CHECKING
 from sqlalchemy.engine import Engine
 from sqlalchemy import create_engine
 
-from src.drivers.models import (
+from src.drivers.sql.models import (
     SchemaMetadata,
     TableMetadata,
     ColumnMetadata,
@@ -86,9 +86,9 @@ class BaseDiscoveryDriver(abc.ABC):
         """
 
         # Import drivers here to avoid circular import
-        from src.drivers.postgres import PostgresDiscoveryDriver
-        from src.drivers.mysql import MySQLDiscoveryDriver
-        from src.drivers.oracle import OracleDiscoveryDriver
+        from src.drivers.sql.postgres import PostgresDiscoveryDriver
+        from src.drivers.sql.mysql import MySQLDiscoveryDriver
+        from src.drivers.sql.oracle import OracleDiscoveryDriver
 
         dt = datastore_type.upper()
 
