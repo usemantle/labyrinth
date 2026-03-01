@@ -1,7 +1,20 @@
+from __future__ import annotations
+
 import abc
 import uuid
+from dataclasses import dataclass
 
-from src.graph.graph_models import Node, Edge, URN
+from src.graph.credentials import CredentialBase
+from src.graph.graph_models import Edge, Node, URN
+
+
+@dataclass
+class URNComponent:
+    """A variable part of a URN that the user must provide when registering a target."""
+
+    name: str
+    description: str
+    default: str | None = None
 
 
 class ConceptLoader(abc.ABC):
@@ -37,4 +50,28 @@ class ConceptLoader(abc.ABC):
         Returns:
             A tuple of (nodes, edges) discovered from the resource.
         """
+        ...
+
+    @classmethod
+    @abc.abstractmethod
+    def display_name(cls) -> str:
+        """Human-readable name shown in the target selector."""
+        ...
+
+    @classmethod
+    @abc.abstractmethod
+    def urn_components(cls) -> list[URNComponent]:
+        """Variable URN parts the user must provide to identify a target."""
+        ...
+
+    @classmethod
+    @abc.abstractmethod
+    def credential_type(cls) -> type[CredentialBase]:
+        """The credential type this loader requires."""
+        ...
+
+    @classmethod
+    @abc.abstractmethod
+    def build_target_urn(cls, **components: str) -> URN:
+        """Build the root target URN from the provided component values."""
         ...

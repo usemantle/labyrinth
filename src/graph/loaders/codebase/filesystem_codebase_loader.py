@@ -7,10 +7,14 @@ For scanning directories without git context (e.g. mounted volumes,
 extracted archives, or local development directories).
 """
 
+from __future__ import annotations
+
 import uuid
 
+from src.graph.credentials import CredentialBase, NoCredential
 from src.graph.graph_models import URN
 from src.graph.loaders.codebase.codebase_loader import CodebaseLoader
+from src.graph.loaders.loader import URNComponent
 
 
 class FileSystemCodebaseLoader(CodebaseLoader):
@@ -28,3 +32,21 @@ class FileSystemCodebaseLoader(CodebaseLoader):
     def build_urn(self, *path_segments: str) -> URN:
         path = "/".join(path_segments)
         return URN(f"urn:local:codebase:{self._hostname}:_:{path}")
+
+    @classmethod
+    def display_name(cls) -> str:
+        return "Local Codebase"
+
+    @classmethod
+    def urn_components(cls) -> list[URNComponent]:
+        return [
+            URNComponent("path", "Path to codebase root"),
+        ]
+
+    @classmethod
+    def credential_type(cls) -> type[CredentialBase]:
+        return NoCredential
+
+    @classmethod
+    def build_target_urn(cls, **components: str) -> URN:
+        return URN(f"urn:_:repo:_:_:{components['path']}")

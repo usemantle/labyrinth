@@ -7,9 +7,12 @@ collapses variable segments (UUIDs, dates, hive time partitions, etc.)
 using pluggable matchers, and emits a hierarchical set of nodes.
 """
 
+from __future__ import annotations
+
 import logging
 import uuid
 
+from src.graph.credentials import AWSProfileCredential, CredentialBase
 from src.graph.graph_models import (
     Edge,
     Node,
@@ -19,7 +22,7 @@ from src.graph.graph_models import (
     URN,
 )
 from src.graph.loaders._helpers import make_edge
-from src.graph.loaders.loader import ConceptLoader
+from src.graph.loaders.loader import ConceptLoader, URNComponent
 from src.graph.loaders.object_store.s3.matchers import (
     SegmentMatcher,
     SequenceMatcher,
@@ -72,6 +75,26 @@ class S3BucketLoader(ConceptLoader):
         return URN(
             f"urn:aws:s3:{self._account_id}:{self._region}:{path}"
         )
+
+    @classmethod
+    def display_name(cls) -> str:
+        return "AWS S3 Bucket"
+
+    @classmethod
+    def urn_components(cls) -> list[URNComponent]:
+        return [
+            URNComponent("account_id", "AWS account ID"),
+            URNComponent("region", "AWS region"),
+            URNComponent("bucket", "S3 bucket name"),
+        ]
+
+    @classmethod
+    def credential_type(cls) -> type[CredentialBase]:
+        return AWSProfileCredential
+
+    @classmethod
+    def build_target_urn(cls, **components: str) -> URN:
+        return URN(f"urn:aws:s3:{components['account_id']}:{components['region']}:{components['bucket']}")
 
     def load(self, resource: str) -> tuple[list[Node], list[Edge]]:
         """Load nodes and edges from an S3 bucket.

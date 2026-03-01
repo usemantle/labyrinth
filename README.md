@@ -1,6 +1,5 @@
 # labyrinth
-
-Security graph discovery library — discovers code, databases, and cloud resources and stitches them into a queryable graph.
+Labyrinth is an AI knowledge base that discovers code, databases, and cloud resources and stitches them into a queryable graph for your AI agent.
 
 ## Installation
 

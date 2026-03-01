@@ -11,14 +11,17 @@ URN schemes:
     Repo: urn:github:repo:{org}:_:{repo_name}
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import urllib.request
 import uuid
 
+from src.graph.credentials import CredentialBase, GithubTokenCredential
 from src.graph.graph_models import Edge, Node, NodeMetadata, NodeMetadataKey, RelationType, URN
 from src.graph.loaders._helpers import make_edge
-from src.graph.loaders.loader import ConceptLoader
+from src.graph.loaders.loader import ConceptLoader, URNComponent
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,25 @@ class GithubOrgLoader(ConceptLoader):
     def build_urn(self, *path_segments: str) -> URN:
         path = "/".join(path_segments)
         return URN(f"urn:github:org:{self._github_org}:_:{path}")
+
+    @classmethod
+    def display_name(cls) -> str:
+        return "GitHub Organization"
+
+    @classmethod
+    def urn_components(cls) -> list[URNComponent]:
+        return [
+            URNComponent("org", "GitHub organization name"),
+        ]
+
+    @classmethod
+    def credential_type(cls) -> type[CredentialBase]:
+        return GithubTokenCredential
+
+    @classmethod
+    def build_target_urn(cls, **components: str) -> URN:
+        org = components["org"]
+        return URN(f"urn:github:org:{org}:_:{org}")
 
     def load(self, resource: str) -> tuple[list[Node], list[Edge]]:
         """Discover org structure and repositories.
