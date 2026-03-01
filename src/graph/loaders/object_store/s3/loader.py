@@ -96,6 +96,22 @@ class S3BucketLoader(ConceptLoader):
     def build_target_urn(cls, **components: str) -> URN:
         return URN(f"urn:aws:s3:{components['account_id']}:{components['region']}:{components['bucket']}")
 
+    @classmethod
+    def from_target_config(
+        cls, project_id: uuid.UUID, urn: URN, credentials: dict, **kwargs,
+    ) -> tuple[S3BucketLoader, str]:
+        import boto3
+
+        session = boto3.Session(profile_name=credentials.get("profile", "default"))
+        s3_client = session.client("s3", region_name=urn.region)
+        loader = cls(
+            project_id,
+            account_id=urn.account,
+            region=urn.region,
+            s3_client=s3_client,
+        )
+        return loader, f"arn:aws:s3:::{urn.path}"
+
     def load(self, resource: str) -> tuple[list[Node], list[Edge]]:
         """Load nodes and edges from an S3 bucket.
 

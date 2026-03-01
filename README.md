@@ -53,3 +53,21 @@ labyrinth init my-project
 ```
 
 This creates `~/.labyrinth/` and initializes a project directory under `~/.labyrinth/projects/my-project/`.
+
+## Adding Targets
+
+Register a datasource to your project with:
+
+```bash
+labyrinth add-target
+```
+
+An interactive fuzzy selector will present the available target types:
+
+- **PostgreSQL** — host, port, and database name (username/password credentials)
+- **AWS S3 Bucket** — account ID, region, and bucket name (AWS profile credentials)
+- **Local Codebase** — path to a local directory (no credentials)
+- **GitHub Repository** — organization and repo name (no credentials)
+- **GitHub Organization** — organization name (GitHub token)
+
+After selecting a target type you will be prompted for the URN components that identify the resource, followed by any required credentials. Targets are stored in `~/.labyrinth/projects/<project>/config.toml`.

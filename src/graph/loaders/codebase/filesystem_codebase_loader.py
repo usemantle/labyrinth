@@ -10,6 +10,7 @@ extracted archives, or local development directories).
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 
 from src.graph.credentials import CredentialBase, NoCredential
 from src.graph.graph_models import URN
@@ -50,3 +51,10 @@ class FileSystemCodebaseLoader(CodebaseLoader):
     @classmethod
     def build_target_urn(cls, **components: str) -> URN:
         return URN(f"urn:_:repo:_:_:{components['path']}")
+
+    @classmethod
+    def from_target_config(
+        cls, project_id: uuid.UUID, urn: URN, credentials: dict, **kwargs,
+    ) -> tuple[FileSystemCodebaseLoader, str]:
+        resolved = str(Path(urn.path).expanduser().resolve())
+        return cls(project_id, hostname=resolved, **kwargs), urn.path

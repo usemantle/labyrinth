@@ -163,6 +163,11 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
         self._exclude_dirs = exclude_dirs or DEFAULT_EXCLUDE_DIRS
         self._plugins = plugins or []
 
+    @classmethod
+    def available_plugins(cls) -> dict[str, type[CodebasePlugin]]:
+        from src.graph.loaders.codebase.plugins import Boto3S3Plugin, FastAPIPlugin, SQLAlchemyPlugin
+        return {"sqlalchemy": SQLAlchemyPlugin, "fastapi": FastAPIPlugin, "boto3-s3": Boto3S3Plugin}
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -176,11 +181,12 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
         Returns:
             A tuple of (nodes, edges) discovered from the codebase.
         """
-        root_path = Path(resource)
+
+        root_path = Path(resource).expanduser()
         root_name = self._get_root_name(resource)
-
+        print(root_path)
         files = self._enumerate_files(root_path)
-
+        print(files)
         nodes: list[Node] = []
         edges: list[Edge] = []
         file_sources: dict[str, str] = {}

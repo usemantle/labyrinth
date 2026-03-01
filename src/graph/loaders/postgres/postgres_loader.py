@@ -4,10 +4,11 @@ Abstract PostgreSQL loader for the security graph.
 Uses PostgresDiscoveryDriver to discover schemas, tables, columns, and
 foreign keys, and transforms them into graph Nodes and Edges.
 
-Concrete subclasses (RDSPostgresLoader, OnPremPostgresLoader, etc.)
+Concrete subclasses (OnPremPostgresLoader, etc.)
 provide URN construction via build_urn().
 """
 
+import importlib.resources
 import abc
 import logging
 import uuid

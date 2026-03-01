@@ -75,3 +75,26 @@ class ConceptLoader(abc.ABC):
     def build_target_urn(cls, **components: str) -> URN:
         """Build the root target URN from the provided component values."""
         ...
+
+    @classmethod
+    def available_plugins(cls) -> dict[str, type]:
+        """Plugin-name -> plugin-class for this loader. Empty for non-codebase loaders."""
+        return {}
+
+    @classmethod
+    @abc.abstractmethod
+    def from_target_config(
+        cls, project_id: uuid.UUID, urn: URN, credentials: dict, **kwargs,
+    ) -> tuple[ConceptLoader, str]:
+        """Create a loader and resource string from stored target configuration.
+
+        Args:
+            project_id: The project UUID used as organization_id.
+            urn: The parsed target URN from the project config.
+            credentials: Credential dict from the project config.
+            **kwargs: Loader-specific extra arguments (e.g. clone_path).
+
+        Returns:
+            A tuple of (loader_instance, resource_string_for_load).
+        """
+        ...

@@ -153,10 +153,14 @@ function urnLabel(urn) {
 
 // ── Load and render ──
 async function main() {
+  console.log("[labyrinth] main() starting");
+  try {
   const resp = await fetch("graph_data.json");
+  if (!resp.ok) { console.error("[labyrinth] graph_data.json fetch failed:", resp.status); return; }
   const data = await resp.json();
   allNodes = data.nodes;
   allEdges = data.edges;
+  console.log(`[labyrinth] Loaded ${allNodes.length} nodes, ${allEdges.length} edges`);
 
   // Merge soft links as additional edges
   try {
@@ -189,9 +193,14 @@ async function main() {
   document.getElementById("toggle-btn").addEventListener("click", toggleSidebar);
   document.getElementById("hide-structural").addEventListener("change", onStructuralToggle);
   document.getElementById("layout-select").addEventListener("change", onLayoutChange);
+  } catch (err) {
+    console.error("[labyrinth] main() error:", err);
+    document.getElementById("stats").textContent = "Error: " + err.message + " (check browser console for details)";
+  }
 }
 
 function buildGraph() {
+  console.log("[labyrinth] buildGraph() starting");
   if (sigmaInstance) { sigmaInstance.kill(); sigmaInstance = null; }
 
   const graph = new Graph({ multi: true, type: "directed" });
@@ -199,9 +208,10 @@ function buildGraph() {
 
   nodeTypeIndex = {};
 
-  // Add nodes (skip hidden)
+  // Add nodes (skip hidden and duplicates)
   for (const n of allNodes) {
     if (hiddenNodes.has(n.urn)) continue;
+    if (graph.hasNode(n.urn)) continue;
     const style = NODE_STYLES[n.node_type] || NODE_STYLES.unknown;
     nodeTypeIndex[n.node_type] = nodeTypeIndex[n.node_type] || [];
     nodeTypeIndex[n.node_type].push(n.urn);
@@ -263,6 +273,7 @@ function buildGraph() {
     hoveredNeighbors = new Set();
     sigmaInstance.refresh();
   });
+  console.log(`[labyrinth] buildGraph() done — graph has ${graph.order} nodes, ${graph.size} edges`);
 }
 
 // ── Layout ──

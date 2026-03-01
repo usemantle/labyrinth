@@ -62,6 +62,12 @@ class GithubOrgLoader(ConceptLoader):
         org = components["org"]
         return URN(f"urn:github:org:{org}:_:{org}")
 
+    @classmethod
+    def from_target_config(
+        cls, project_id: uuid.UUID, urn: URN, credentials: dict, **kwargs,
+    ) -> tuple[GithubOrgLoader, str]:
+        return cls(project_id, github_org=urn.account, github_token=credentials["token"]), urn.account
+
     def load(self, resource: str) -> tuple[list[Node], list[Edge]]:
         """Discover org structure and repositories.
 

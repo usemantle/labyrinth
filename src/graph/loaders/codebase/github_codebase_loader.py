@@ -51,6 +51,13 @@ class GithubCodebaseLoader(GitCodebaseLoader):
     def build_target_urn(cls, **components: str) -> URN:
         return URN(f"urn:github:repo:{components['org']}:_:{components['repo']}")
 
+    @classmethod
+    def from_target_config(
+        cls, project_id: uuid.UUID, urn: URN, credentials: dict, **kwargs,
+    ) -> tuple[GithubCodebaseLoader, str]:
+        clone_path: str = kwargs.pop("clone_path")
+        return cls(project_id, github_org=urn.account, repo_name=urn.path, **kwargs), clone_path
+
     def _get_root_name(self, resource: str) -> str:
         return self._repo_name
 

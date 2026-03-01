@@ -51,3 +51,13 @@ class OnPremPostgresLoader(PostgresLoader):
     @classmethod
     def build_target_urn(cls, **components: str) -> URN:
         return URN(f"urn:onprem:postgres:{components['host']}:{components['port']}:{components['database']}")
+
+    @classmethod
+    def from_target_config(
+        cls, project_id: uuid.UUID, urn: URN, credentials: dict, **kwargs,
+    ) -> tuple[OnPremPostgresLoader, str]:
+        resource = (
+            f"postgresql://{credentials['username']}:{credentials['password']}"
+            f"@{urn.account}:{urn.region}/{urn.path}"
+        )
+        return cls(project_id, resource), resource
