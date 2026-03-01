@@ -1,0 +1,15 @@
+#compdef labyrinth
+#
+# Zsh completion script for the labyrinth CLI.
+#
+# Installation:
+#   Option 1: Source directly in your .zshrc:
+#     eval "$(_LABYRINTH_COMPLETE=zsh_source labyrinth)"
+#
+#   Option 2: Copy this file to a directory in your fpath:
+#     cp completions/_labyrinth ~/.zfunc/_labyrinth
+#     # Then add to .zshrc (before compinit):
+#     #   fpath=(~/.zfunc $fpath)
+#     #   autoload -Uz compinit && compinit
+
+eval "$(_LABYRINTH_COMPLETE=zsh_source labyrinth)"

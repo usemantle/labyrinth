@@ -11,7 +11,12 @@ dependencies = [
     "pydantic>=2.12.5",
     "sqlalchemy>=2.0.44",
     "mcp>=1.0.0",
+    "rich-click>=1.8.0",
+    "tomli_w>=1.0.0",
 ]
+
+[project.scripts]
+labyrinth = "src.cli.main:cli"
 
 [build-system]
 requires = ["hatchling"]
