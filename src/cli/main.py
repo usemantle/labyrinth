@@ -135,6 +135,27 @@ def init(project_name: str) -> None:
 
 
 @cli.command()
+def set_active_project() -> None:
+    """Switch the active project."""
+    _maybe_create_labyrinth_dir()
+
+    projects = sorted(p.name for p in PROJECTS_DIR.iterdir() if p.is_dir())
+    if not projects:
+        raise click.ClickException("No projects found. Run 'labyrinth init <project>' first.")
+
+    selected = iterfzf(projects, prompt="Select project: ")
+    if selected is None:
+        raise click.ClickException("No project selected.")
+
+    config = _get_config()
+    config.setdefault("projects", {})
+    config["projects"]["active"] = selected
+    _save_config(config)
+
+    click.echo(f"Active project set to '{selected}'.")
+
+
+@cli.command()
 def add_target() -> None:
     """Register a target resource to the active project."""
     project = _get_active_project()
