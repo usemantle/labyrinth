@@ -46,28 +46,95 @@ fpath=(~/.zfunc $fpath)
 autoload -Uz compinit && compinit
 ```
 
-## Quick Start
+## Getting Started
+
+### 1. Create a project
 
 ```bash
 labyrinth init my-project
 ```
 
-This creates `~/.labyrinth/` and initializes a project directory under `~/.labyrinth/projects/my-project/`.
+This creates `~/.labyrinth/` and initializes a project directory under `~/.labyrinth/projects/my-project/`. The project is automatically set as the active project.
 
-## Adding Targets
+### 2. Add targets
 
-Register a datasource to your project with:
+Register datasources to your project:
 
 ```bash
 labyrinth add-target
 ```
 
-An interactive fuzzy selector will present the available target types:
+An interactive fuzzy selector presents the available target types (more coming soon):
 
-- **PostgreSQL** — host, port, and database name (username/password credentials)
-- **AWS S3 Bucket** — account ID, region, and bucket name (AWS profile credentials)
-- **Local Codebase** — path to a local directory (no credentials)
-- **GitHub Repository** — organization and repo name (no credentials)
-- **GitHub Organization** — organization name (GitHub token)
+| Target | URN components | Credentials |
+|--------|---------------|-------------|
+| **PostgreSQL** | host, port, database | username / password |
+| **AWS S3 Bucket** | account ID, region, bucket | AWS profile |
+| **Local Codebase** | path to directory | none |
+| **GitHub Repository** | org, repo | none |
+| **GitHub Organization** | org | GitHub token |
 
-After selecting a target type you will be prompted for the URN components that identify the resource, followed by any required credentials. Targets are stored in `~/.labyrinth/projects/<project>/config.toml`.
+After selecting a type you'll be prompted for the URN components and any required credentials. Repeat `add-target` for each target you want in the graph.
+
+### 3. Add plugins (codebase targets)
+
+Codebase targets support plugins that enrich the graph with framework-specific metadata:
+
+```bash
+labyrinth add-plugin
+```
+
+Select a codebase target, then pick a plugin:
+
+| Plugin | What it detects |
+|--------|----------------|
+| **sqlalchemy** | ORM model classes with `__tablename__`, tags nodes with the mapped table name |
+| **fastapi** | Route decorators (`@router.get`, etc.), resolves full route paths including `APIRouter` and `include_router` prefixes |
+| **boto3-s3** | S3 client creation and API calls (`put_object`, `get_object`, etc.), tags with operation types |
+
+Plugins run automatically during scan. You can add multiple plugins to the same target.
+
+### 4. Scan
+
+Build the security graph from all registered targets:
+
+```bash
+labyrinth scan
+```
+
+You'll be prompted to scan a specific target or all targets at once. The scan:
+
+1. Connects to each datasource and extracts nodes (databases, tables, columns, files, classes, functions, etc.)
+2. Runs language-specific analysis (Python import/call resolution)
+3. Runs plugins for framework-specific enrichment
+4. Stitches cross-domain edges (e.g. `CODE_TO_DATA` linking ORM models to database tables)
+5. Writes the result to `~/.labyrinth/projects/<project>/graph.json`
+
+### 5. Visualize
+
+Launch an interactive graph visualization in the browser:
+
+```bash
+labyrinth visualize
+```
+
+This starts a local server and opens the graph viewer with:
+
+- Node filtering by type (database, table, file, class, function, etc.)
+- Edge filtering by relationship (CONTAINS, CODE_TO_DATA, CODE_TO_CODE)
+- ForceAtlas2, circular, and random layouts
+- Hover tooltips showing node metadata
+- A stats bar with node/edge counts
+
+Use `--port` to change the default port (8787):
+
+```bash
+labyrinth visualize --port 9000
+```
+
+### Managing your project
+
+```bash
+labyrinth describe-project   # Print the active project's configuration
+labyrinth remove-target      # Interactively remove a target
+```
