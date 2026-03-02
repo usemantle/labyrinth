@@ -30,6 +30,8 @@ packages = ["src"]
 [tool.uv]
 dev-dependencies = [
     "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "genbadge[coverage]>=1.1",
     "ruff>=0.8.4",
 ]
 
@@ -54,6 +56,13 @@ select = [
 ignore = [
     "E501",  # line too long (handled by formatter)
 ]
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
 
 [tool.pyrefly]
 project-includes = ["src"]
