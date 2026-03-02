@@ -20,9 +20,8 @@ from src.graph.graph_models import (
     URN,
 )
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
-from src.graph.loaders.codebase.github_codebase_loader import GithubCodebaseLoader
+from src.graph.loaders.codebase.git_codebase_loader import GitCodebaseLoader
 from src.graph.loaders.codebase.plugins import Boto3S3Plugin, CodebasePlugin, SQLAlchemyPlugin
-from src.graph.loaders.github.github_org_loader import GithubOrgLoader
 from scripts.build_graph import stitch_code_to_data
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
@@ -339,163 +338,67 @@ def test_fs_decorated_class(fs_result):
     assert len(user) == 1
 
 
-# ── GithubCodebaseLoader tests ─────────────────────────────────────────
+# ── GitCodebaseLoader tests ─────────────────────────────────────────
 
 
 @pytest.fixture()
-def github_result(tmp_path):
-    """Run GithubCodebaseLoader on a temporary repo."""
+def git_result(tmp_path):
+    """Run GitCodebaseLoader on a temporary repo."""
     repo = _make_tmp_repo(tmp_path)
-    # Mock git to return a known commit
     with patch(
         "src.graph.loaders.codebase.git_codebase_loader.GitCodebaseLoader._get_head_commit"
     ) as mock_commit:
         mock_commit.return_value = "abc123def456"
-        loader = GithubCodebaseLoader(
+        loader = GitCodebaseLoader(
             organization_id=ORG_ID,
-            github_org="acme",
-            repo_name="my-service",
+            repo_url="https://github.com/acme/my-service.git",
+            repo_hostname="github.com",
+            repo_path="acme/my-service",
         )
         return loader.load(str(repo))
 
 
-def test_github_urn_scheme(github_result):
-    nodes, _ = github_result
+def test_git_urn_scheme(git_result):
+    nodes, _ = git_result
     root = nodes[0]
-    assert str(root.urn) == "urn:github:repo:acme:_:my-service"
+    assert str(root.urn) == "urn:git:repo:github.com:_:my-service"
 
 
-def test_github_root_metadata(github_result):
-    nodes, _ = github_result
+def test_git_root_metadata(git_result):
+    nodes, _ = git_result
     root = nodes[0]
     assert root.metadata[NK.REPO_NAME] == "my-service"
     assert root.metadata[NK.SCANNED_COMMIT] == "abc123def456"
-    assert root.metadata[NK.GITHUB_ORG] == "acme"
+    assert root.metadata[NK.REPO_URL] == "https://github.com/acme/my-service.git"
 
 
-def test_github_file_urn(github_result):
-    nodes, _ = github_result
+def test_git_file_urn(git_result):
+    nodes, _ = git_result
     app = next(
         n for n in nodes
         if n.metadata.get(NK.FILE_PATH) == "app.py" and NK.CLASS_NAME not in n.metadata
     )
-    assert str(app.urn) == "urn:github:repo:acme:_:my-service/app.py"
+    assert str(app.urn) == "urn:git:repo:github.com:_:my-service/app.py"
 
 
-def test_github_class_urn(github_result):
-    nodes, _ = github_result
+def test_git_class_urn(git_result):
+    nodes, _ = git_result
     user_service = next(n for n in nodes if n.metadata.get(NK.CLASS_NAME) == "UserService")
-    assert str(user_service.urn) == "urn:github:repo:acme:_:my-service/app.py/UserService"
+    assert str(user_service.urn) == "urn:git:repo:github.com:_:my-service/app.py/UserService"
 
 
-def test_github_method_urn(github_result):
-    nodes, _ = github_result
+def test_git_method_urn(git_result):
+    nodes, _ = git_result
     get_user = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "get_user")
-    assert str(get_user.urn) == "urn:github:repo:acme:_:my-service/app.py/UserService/get_user"
+    assert str(get_user.urn) == "urn:git:repo:github.com:_:my-service/app.py/UserService/get_user"
 
 
-def test_github_uses_repo_name_not_dir_name(github_result):
-    """Root name is repo_name from constructor, not the tmp dir name."""
-    nodes, _ = github_result
+def test_git_uses_repo_name_not_dir_name(git_result):
+    """Root name is repo_path last segment, not the tmp dir name."""
+    nodes, _ = git_result
     root = nodes[0]
     assert "my-service" in str(root.urn)
     assert root.metadata[NK.REPO_NAME] == "my-service"
-
-
-# ── GithubOrgLoader tests ─────────────────────────────────────────────
-
-
-MOCK_REPOS = [
-    {
-        "name": "api-server",
-        "full_name": "acme/api-server",
-        "private": False,
-        "default_branch": "main",
-        "language": "Python",
-        "archived": False,
-        "clone_url": "https://github.com/acme/api-server.git",
-    },
-    {
-        "name": "frontend",
-        "full_name": "acme/frontend",
-        "private": True,
-        "default_branch": "develop",
-        "language": "TypeScript",
-        "archived": False,
-        "clone_url": "https://github.com/acme/frontend.git",
-    },
-]
-
-
-@pytest.fixture()
-def org_result():
-    """Run GithubOrgLoader with mocked API."""
-    loader = GithubOrgLoader(
-        organization_id=ORG_ID,
-        github_org="acme",
-        github_token="fake-token",
-    )
-    with patch.object(loader, "_fetch_repos", return_value=MOCK_REPOS):
-        return loader.load("acme")
-
-
-def test_org_node_count(org_result):
-    nodes, _ = org_result
-    # 1 org + 2 repos = 3
-    assert len(nodes) == 3
-
-
-def test_org_root_node(org_result):
-    nodes, _ = org_result
-    org = nodes[0]
-    assert str(org.urn) == "urn:github:org:acme:_:acme"
-    assert org.parent_urn is None
-    assert org.metadata[NK.ORG_NAME] == "acme"
-    assert org.metadata[NK.REPO_COUNT] == 2
-
-
-def test_org_repo_nodes(org_result):
-    nodes, _ = org_result
-    repos = [n for n in nodes if NK.CLONE_URL in n.metadata]
-    assert len(repos) == 2
-    names = {n.metadata[NK.REPO_NAME] for n in repos}
-    assert names == {"api-server", "frontend"}
-
-
-def test_org_repo_urn_matches_codebase_loader(org_result):
-    """Repo URNs should match GithubCodebaseLoader's root URN scheme."""
-    nodes, _ = org_result
-    api = next(n for n in nodes if n.metadata.get(NK.REPO_NAME) == "api-server")
-    assert str(api.urn) == "urn:github:repo:acme:_:api-server"
-
-
-def test_org_contains_edges(org_result):
-    _, edges = org_result
-    contains = [e for e in edges if e.relation_type == RelationType.CONTAINS]
-    assert len(contains) == 2
-    # All edges from org to repos
-    for edge in contains:
-        assert "org:acme:_:acme" in str(edge.from_urn)
-
-
-def test_org_repo_metadata(org_result):
-    nodes, _ = org_result
-    frontend = next(n for n in nodes if n.metadata.get(NK.REPO_NAME) == "frontend")
-    assert frontend.metadata[NK.PRIVATE] is True
-    assert frontend.metadata[NK.DEFAULT_BRANCH] == "develop"
-    assert frontend.metadata[NK.LANGUAGE] == "TypeScript"
-
-
-def test_org_all_nodes_have_org_id(org_result):
-    nodes, _ = org_result
-    for node in nodes:
-        assert node.organization_id == ORG_ID
-
-
-def test_org_all_edges_have_org_id(org_result):
-    _, edges = org_result
-    for edge in edges:
-        assert edge.organization_id == ORG_ID
 
 
 # ── Language detection ─────────────────────────────────────────────────
@@ -507,7 +410,6 @@ def test_language_detection():
     assert loader._detect_language(Path("test.js")) == "javascript"
     assert loader._detect_language(Path("test.ts")) == "typescript"
     assert loader._detect_language(Path("test.java")) == "java"
-    assert loader._detect_language(Path("test.go")) == "go"
     assert loader._detect_language(Path("test.md")) is None
     assert loader._detect_language(Path("test.txt")) is None
 

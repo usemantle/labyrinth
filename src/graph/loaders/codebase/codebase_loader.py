@@ -66,7 +66,6 @@ EXTENSION_TO_LANGUAGE: dict[str, str] = {
     ".tsx": "tsx",
     ".jsx": "javascript",
     ".java": "java",
-    ".go": "go",
     ".rb": "ruby",
     ".rs": "rust",
     ".kt": "kotlin",
@@ -112,6 +111,9 @@ class LanguageConfig:
     # AST kinds that wrap definitions (e.g. decorated_definition in Python).
     # Maps wrapper kind → field name containing the inner definition.
     wrapper_kinds: dict[str, str] = field(default_factory=dict)
+    # AST kinds that are recursed into without creating a node.
+    # Maps kind → body field name (e.g. impl_item → "body" in Rust).
+    transparent_kinds: dict[str, str] = field(default_factory=dict)
 
 
 LANGUAGE_CONFIGS: dict[str, LanguageConfig] = {
@@ -136,9 +138,10 @@ LANGUAGE_CONFIGS: dict[str, LanguageConfig] = {
         class_kinds=["class_declaration", "interface_declaration"],
         function_kinds=["method_declaration"],
     ),
-    "go": LanguageConfig(
-        class_kinds=[],  # Go structs handled separately
-        function_kinds=["function_declaration", "method_declaration"],
+    "rust": LanguageConfig(
+        class_kinds=["struct_item", "enum_item", "trait_item"],
+        function_kinds=["function_item"],
+        transparent_kinds={"impl_item": "body"},
     ),
 }
 
@@ -184,9 +187,7 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
 
         root_path = Path(resource).expanduser()
         root_name = self._get_root_name(resource)
-        print(root_path)
         files = self._enumerate_files(root_path)
-        print(files)
         nodes: list[Node] = []
         edges: list[Edge] = []
         file_sources: dict[str, str] = {}
@@ -325,19 +326,14 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
     # File enumeration
     # ------------------------------------------------------------------
 
+    @abc.abstractmethod
     def _enumerate_files(self, root_path: Path) -> list[Path]:
-        """Walk the directory tree and return parseable files."""
-        files: list[Path] = []
-        for path in sorted(root_path.rglob("*")):
-            if not path.is_file():
-                continue
-            # Skip excluded directories
-            if any(part in self._exclude_dirs for part in path.relative_to(root_path).parts):
-                continue
-            # Only include files with recognized extensions
-            if path.suffix in EXTENSION_TO_LANGUAGE:
-                files.append(path)
-        return files
+        """Return parseable files under root_path.
+
+        Subclasses implement their own file discovery strategy.
+        Returned paths must be absolute with suffixes in EXTENSION_TO_LANGUAGE.
+        """
+        ...
 
     # ------------------------------------------------------------------
     # Language detection
@@ -382,13 +378,6 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
             return [], [], source
 
         config = LANGUAGE_CONFIGS[language]
-
-        # For Go, handle struct types + top-level functions specially
-        if language == "go":
-            nodes, edges = self._analyze_go_file(
-                ast_root, file_urn, root_name, rel_path, source,
-            )
-            return nodes, edges, source
 
         nodes, edges = self._extract_from_scope(
             ast_root, config, file_urn, root_name, rel_path, [], language,
@@ -515,160 +504,18 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
                     self.organization_id, parent_urn, func_urn, RelationType.CONTAINS,
                 ))
 
-        return nodes, edges
-
-    # ------------------------------------------------------------------
-    # Go-specific analysis
-    # ------------------------------------------------------------------
-
-    def _analyze_go_file(
-        self,
-        ast_root,
-        file_urn: URN,
-        root_name: str,
-        rel_path: str,
-        source: str,
-    ) -> tuple[list[Node], list[Edge]]:
-        """Extract structs and functions from a Go file.
-
-        Go methods are at the top level (not nested inside structs),
-        so we associate them with their receiver type.
-        """
-        nodes: list[Node] = []
-        edges: list[Edge] = []
-
-        # Discover struct types → treat as "classes"
-        struct_names: set[str] = set()
-        struct_urns: dict[str, URN] = {}
-
-        for child in ast_root.children():
-            if child.kind() == "type_declaration":
-                for spec in child.children():
-                    if spec.kind() == "type_spec":
-                        name_node = spec.field("name")
-                        type_node = spec.field("type")
-                        if name_node and type_node and type_node.kind() == "struct_type":
-                            struct_name = name_node.text()
-                            struct_names.add(struct_name)
-                            struct_urn = self.build_urn(root_name, rel_path, struct_name)
-                            struct_urns[struct_name] = struct_urn
-
-                            r = child.range()
-                            struct_node = Node(
-                                organization_id=self.organization_id,
-                                urn=struct_urn,
-                                parent_urn=file_urn,
-                                metadata=NodeMetadata({
-                                    NodeMetadataKey.CLASS_NAME: struct_name,
-                                    NodeMetadataKey.FILE_PATH: rel_path,
-                                    NodeMetadataKey.START_LINE: r.start.line,
-                                    NodeMetadataKey.END_LINE: r.end.line,
-                                }),
-                            )
-                            body_source = type_node.text() if type_node else ""
-                            for plugin in self._plugins:
-                                struct_node = plugin.on_class_node(struct_node, body_source, "go")
-                            nodes.append(struct_node)
-                            edges.append(make_edge(
-                                self.organization_id, file_urn, struct_urn,
-                                RelationType.CONTAINS,
-                            ))
-
-        # Discover functions and methods
-        for child in ast_root.children():
-            if child.kind() == "function_declaration":
-                name_node = child.field("name")
-                if not name_node:
-                    continue
-                func_name = name_node.text()
-                func_urn = self.build_urn(root_name, rel_path, func_name)
-
-                r = child.range()
-                go_func_node = Node(
-                    organization_id=self.organization_id,
-                    urn=func_urn,
-                    parent_urn=file_urn,
-                    metadata=NodeMetadata({
-                        NodeMetadataKey.FUNCTION_NAME: func_name,
-                        NodeMetadataKey.FILE_PATH: rel_path,
-                        NodeMetadataKey.START_LINE: r.start.line,
-                        NodeMetadataKey.END_LINE: r.end.line,
-                        NodeMetadataKey.IS_METHOD: False,
-                    }),
-                )
-                func_source = child.text()
-                for plugin in self._plugins:
-                    go_func_node = plugin.on_function_node(go_func_node, func_source, "go")
-                nodes.append(go_func_node)
-                edges.append(make_edge(
-                    self.organization_id, file_urn, func_urn, RelationType.CONTAINS,
-                ))
-
-            elif child.kind() == "method_declaration":
-                name_node = child.field("name")
-                if not name_node:
-                    continue
-                method_name = name_node.text()
-
-                # Extract receiver type to associate with struct
-                receiver_type = self._extract_go_receiver_type(child)
-                if receiver_type and receiver_type in struct_urns:
-                    method_parent_urn = struct_urns[receiver_type]
-                    method_urn = self.build_urn(
-                        root_name, rel_path, receiver_type, method_name,
+            elif kind in config.transparent_kinds:
+                body_field = config.transparent_kinds[kind]
+                body = actual.field(body_field)
+                if body:
+                    sub_nodes, sub_edges = self._extract_from_scope(
+                        body, config, parent_urn, root_name, rel_path,
+                        name_chain, language,
                     )
-                else:
-                    method_parent_urn = file_urn
-                    method_urn = self.build_urn(root_name, rel_path, method_name)
-
-                r = child.range()
-                meta = NodeMetadata({
-                    NodeMetadataKey.FUNCTION_NAME: method_name,
-                    NodeMetadataKey.FILE_PATH: rel_path,
-                    NodeMetadataKey.START_LINE: r.start.line,
-                    NodeMetadataKey.END_LINE: r.end.line,
-                    NodeMetadataKey.IS_METHOD: True,
-                })
-                if receiver_type:
-                    meta[NodeMetadataKey.RECEIVER_TYPE] = receiver_type
-
-                go_method_node = Node(
-                    organization_id=self.organization_id,
-                    urn=method_urn,
-                    parent_urn=method_parent_urn,
-                    metadata=meta,
-                )
-                method_source = child.text()
-                for plugin in self._plugins:
-                    go_method_node = plugin.on_function_node(go_method_node, method_source, "go")
-                nodes.append(go_method_node)
-                edges.append(make_edge(
-                    self.organization_id, method_parent_urn, method_urn,
-                    RelationType.CONTAINS,
-                ))
+                    nodes.extend(sub_nodes)
+                    edges.extend(sub_edges)
 
         return nodes, edges
-
-    @staticmethod
-    def _extract_go_receiver_type(method_node) -> str | None:
-        """Extract the receiver type name from a Go method declaration."""
-        receiver = method_node.field("receiver")
-        if not receiver:
-            return None
-        # Walk through parameter_list → parameter_declaration → type
-        for param in receiver.children():
-            if param.kind() == "parameter_declaration":
-                type_node = param.field("type")
-                if type_node:
-                    # Handle pointer receivers: *User → User
-                    if type_node.kind() == "pointer_type":
-                        inner = type_node.children()
-                        for c in inner:
-                            if c.kind() == "type_identifier":
-                                return c.text()
-                    elif type_node.kind() == "type_identifier":
-                        return type_node.text()
-        return None
 
     # ------------------------------------------------------------------
     # Helpers

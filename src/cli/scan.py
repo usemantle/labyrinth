@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import subprocess
 import uuid
 from pathlib import Path
 
@@ -38,46 +37,6 @@ def _resolve_loader(urn: URN) -> type[ConceptLoader]:
     return loader_cls
 
 
-# ── GitHub cloning ───────────────────────────────────────────────────
-
-def _ensure_repo_cloned(
-    project_dir: Path,
-    org: str,
-    repo: str,
-    token: str | None = None,
-) -> Path:
-    """Clone or pull a GitHub repo into the project's repos directory.
-
-    Returns the local path to the cloned repo.
-    """
-    repos_dir = project_dir / "repos" / org
-    repos_dir.mkdir(parents=True, exist_ok=True)
-    repo_path = repos_dir / repo
-
-    if token:
-        clone_url = f"https://x-access-token:{token}@github.com/{org}/{repo}.git"
-    else:
-        clone_url = f"https://github.com/{org}/{repo}.git"
-
-    if repo_path.exists():
-        logger.info("Pulling latest for %s/%s...", org, repo)
-        subprocess.run(
-            ["git", "pull"],
-            cwd=repo_path,
-            capture_output=True,
-            check=False,
-        )
-    else:
-        logger.info("Cloning %s/%s...", org, repo)
-        subprocess.run(
-            ["git", "clone", clone_url, str(repo_path)],
-            capture_output=True,
-            check=True,
-        )
-
-    return repo_path
-
-
 # ── Codebase target detection ────────────────────────────────────────
 
 _CODEBASE_SERVICES = {"repo", "codebase"}
@@ -110,7 +69,7 @@ def run_scan(
 
         logger.info("Scanning %s with %s...", urn, loader_cls.display_name())
 
-        kwargs: dict = {}
+        kwargs: dict = {"project_dir": project_dir}
 
         # Instantiate plugins from config.
         plugin_names = target.get("plugins", [])
@@ -119,16 +78,6 @@ def run_scan(
             plugins = [available[n]() for n in plugin_names if n in available]
             if plugins:
                 kwargs["plugins"] = plugins
-
-        # GitHub repos need a local clone before scanning.
-        from src.graph.loaders.codebase.github_codebase_loader import GithubCodebaseLoader
-
-        if loader_cls is GithubCodebaseLoader:
-            token = credentials.get("token")
-            clone_path = _ensure_repo_cloned(
-                project_dir, urn.account, urn.path, token=token,
-            )
-            kwargs["clone_path"] = str(clone_path)
 
         loader, resource = loader_cls.from_target_config(
             project_id, urn, credentials, **kwargs,

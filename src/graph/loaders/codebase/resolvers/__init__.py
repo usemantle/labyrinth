@@ -6,9 +6,11 @@ from src.graph.loaders.codebase.resolvers._base import (
     ResolvedImport,
 )
 from src.graph.loaders.codebase.resolvers.python import PythonAnalyzer
+from src.graph.loaders.codebase.resolvers.rust import RustAnalyzer
 
 LANGUAGE_ANALYZERS: dict[str, LanguageAnalyzer] = {
     "python": PythonAnalyzer(),
+    "rust": RustAnalyzer(),
 }
 
 __all__ = [
@@ -17,4 +19,5 @@ __all__ = [
     "LanguageAnalyzer",
     "PythonAnalyzer",
     "ResolvedImport",
+    "RustAnalyzer",
 ]

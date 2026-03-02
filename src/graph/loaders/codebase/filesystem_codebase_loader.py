@@ -14,7 +14,7 @@ from pathlib import Path
 
 from src.graph.credentials import CredentialBase, NoCredential
 from src.graph.graph_models import URN
-from src.graph.loaders.codebase.codebase_loader import CodebaseLoader
+from src.graph.loaders.codebase.codebase_loader import EXTENSION_TO_LANGUAGE, CodebaseLoader
 from src.graph.loaders.loader import URNComponent
 
 
@@ -56,5 +56,17 @@ class FileSystemCodebaseLoader(CodebaseLoader):
     def from_target_config(
         cls, project_id: uuid.UUID, urn: URN, credentials: dict, **kwargs,
     ) -> tuple[FileSystemCodebaseLoader, str]:
+        kwargs.pop("project_dir", None)
         resolved = str(Path(urn.path).expanduser().resolve())
         return cls(project_id, hostname=resolved, **kwargs), urn.path
+
+    def _enumerate_files(self, root_path: Path) -> list[Path]:
+        files: list[Path] = []
+        for path in sorted(root_path.rglob("*")):
+            if not path.is_file():
+                continue
+            if any(part in self._exclude_dirs for part in path.relative_to(root_path).parts):
+                continue
+            if path.suffix in EXTENSION_TO_LANGUAGE:
+                files.append(path)
+        return files

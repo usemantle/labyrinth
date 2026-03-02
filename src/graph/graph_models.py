@@ -81,6 +81,7 @@ class NodeMetadataKey(str, enum.Enum):
     # ── Git tracking ───────────────────────────────────────────────
     SCANNED_COMMIT = "scanned_commit"
     GITHUB_ORG = "github_org"
+    REPO_URL = "repo_url"
 
     # ── ORM plugin ─────────────────────────────────────────────────
     ORM_TABLE = "orm_table"
