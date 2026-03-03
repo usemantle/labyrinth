@@ -168,8 +168,20 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
 
     @classmethod
     def available_plugins(cls) -> dict[str, type[CodebasePlugin]]:
-        from src.graph.loaders.codebase.plugins import Boto3S3Plugin, FastAPIPlugin, SQLAlchemyPlugin
-        return {"sqlalchemy": SQLAlchemyPlugin, "fastapi": FastAPIPlugin, "boto3-s3": Boto3S3Plugin}
+        from src.graph.loaders.codebase.plugins import (
+            Boto3S3Plugin,
+            FastAPIPlugin,
+            FlaskPlugin,
+            RequestsPlugin,
+            SQLAlchemyPlugin,
+        )
+        return {
+            "sqlalchemy": SQLAlchemyPlugin,
+            "fastapi": FastAPIPlugin,
+            "flask": FlaskPlugin,
+            "requests": RequestsPlugin,
+            "boto3-s3": Boto3S3Plugin,
+        }
 
     # ------------------------------------------------------------------
     # Public API
