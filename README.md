@@ -112,6 +112,13 @@ labyrinth visualize
 
 ![Example Graph](./resources/example_graph.png)
 
+### 6. AI Everything
+To give your AI agent access to the knowledge graph, you can run
+```
+claude mcp add <mcp-server-name> labyrinth mcp
+```
+
+
 ### Managing your project
 
 ```bash
