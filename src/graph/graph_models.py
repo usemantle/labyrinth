@@ -99,6 +99,17 @@ class NodeMetadataKey(str, enum.Enum):
     AWS_S3_OPERATIONS = "aws_s3_operations"
     AWS_S3_OPERATION_TYPE = "aws_s3_operation_type"
 
+    # ── Security analysis ────────────────────────────────────────────
+    IO_DIRECTION = "io_direction"
+    IO_TYPE = "io_type"
+    CVE_IDS = "cve_ids"
+    DATA_SENSITIVITY = "data_sensitivity"
+
+    # ── Dependency management ────────────────────────────────────────
+    PACKAGE_NAME = "package_name"
+    PACKAGE_VERSION = "package_version"
+    PACKAGE_ECOSYSTEM = "package_ecosystem"
+
     # ── AWS / S3 ─────────────────────────────────────────────────────
     ARN = "arn"
     ACCOUNT_ID = "account_id"
