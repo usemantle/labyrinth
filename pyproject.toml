@@ -1,5 +1,5 @@
 [project]
-name = "labyrinth"
+name = "labyrinth-kb"
 version = "0.1.0"
 description = "Security graph discovery library — discovers code, databases, and cloud resources and stitches them into a queryable graph"
 requires-python = ">=3.13"
