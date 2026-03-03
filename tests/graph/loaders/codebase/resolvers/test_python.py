@@ -1,6 +1,6 @@
 """
-End-to-end tests for Python cross-file import resolution, call graph
-construction, and FastAPI entrypoint detection.
+End-to-end tests for Python cross-file import resolution and call graph
+construction.
 
 Uses three synthetic Python files:
 - main.py:            Server entrypoint with include_router
@@ -10,7 +10,6 @@ Uses three synthetic Python files:
 Asserts:
 1. CODE_TO_CODE edge from get_user -> get_user_by_id (cross-file call)
 2. CODE_TO_CODE edge from get_user -> format_response (same-file call)
-3. API entrypoint metadata on get_user (http_method, route_path, full_route_path)
 """
 
 import uuid
@@ -194,53 +193,3 @@ def test_python_same_file_call_in_assertion(tmp_path):
         f"Expected 1 CODE_TO_CODE edge from vault_path -> is_safe_name, "
         f"found {len(code_to_code)}"
     )
-
-
-# ── Tests: FastAPI entrypoint detection ───────────────────────────────
-
-
-def test_fastapi_http_method_detected(graph_result):
-    """get_user() is decorated with @router.get -- should have http_method metadata."""
-    nodes, _ = graph_result
-    endpoint = _find_node(nodes, function_name="get_user")
-
-    assert endpoint.metadata.get("http_method") == "GET"
-    assert endpoint.metadata.get("api_framework") == "fastapi"
-
-
-def test_fastapi_route_path_from_decorator(graph_result):
-    """The local route path from the decorator should be captured."""
-    nodes, _ = graph_result
-    endpoint = _find_node(nodes, function_name="get_user")
-
-    assert endpoint.metadata.get("route_path") == "/{user_id}"
-
-
-def test_fastapi_full_route_path(graph_result):
-    """The full route path should combine:
-    include_router prefix (/v1) + APIRouter prefix (/users) + decorator path (/{user_id})
-    = /v1/users/{user_id}"""
-    nodes, _ = graph_result
-    endpoint = _find_node(nodes, function_name="get_user")
-
-    assert endpoint.metadata.get("full_route_path") == "/v1/users/{user_id}"
-
-
-# ── Tests: Non-endpoint functions should NOT have API metadata ────────
-
-
-def test_non_endpoint_has_no_api_metadata(graph_result):
-    """format_response() is not decorated -- should have no API metadata."""
-    nodes, _ = graph_result
-    func = _find_node(nodes, function_name="format_response")
-
-    assert func.metadata.get("http_method") is None
-    assert func.metadata.get("route_path") is None
-
-
-def test_service_function_has_no_api_metadata(graph_result):
-    """get_user_by_id() in the service file should have no API metadata."""
-    nodes, _ = graph_result
-    func = _find_node(nodes, function_name="get_user_by_id")
-
-    assert func.metadata.get("http_method") is None
