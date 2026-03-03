@@ -294,6 +294,32 @@ def scan() -> None:
 
 
 @cli.command()
+def mcp() -> None:
+    """Start the MCP server for the active project's knowledge graph."""
+    import sys
+
+    # Redirect logging to stderr — stdout is reserved for MCP protocol.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s: %(message)s",
+        stream=sys.stderr,
+    )
+
+    project = _get_active_project()
+    project_dir = PROJECTS_DIR / project
+    graph_path = project_dir / "graph.json"
+
+    if not graph_path.exists():
+        raise click.ClickException(
+            f"No graph.json found for project '{project}'. Run 'labyrinth scan' first."
+        )
+
+    from src.mcp.main import run_mcp_server
+
+    run_mcp_server(graph_path)
+
+
+@cli.command()
 @click.option("--port", default=8787, show_default=True, help="Port for the local HTTP server.")
 def visualize(port: int) -> None:
     """Launch an interactive graph visualization in the browser."""

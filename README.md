@@ -1,52 +1,19 @@
-# labyrinth
+# Labyrinth
 
 ![Coverage](./coverage.svg)
 
 Labyrinth is an AI knowledge base that discovers code, databases, and cloud resources and stitches them into a queryable graph for your AI agent.
 
-## Installation
+## Quick Start
+Currently we only support installing and running from source:
 
+## Install
 Requires Python 3.13+.
 
 ```bash
 git clone <repo-url> && cd labyrinth
 uv sync
 uv pip install -e .
-```
-
-The `labyrinth` command is now available inside the virtualenv:
-
-```bash
-.venv/bin/labyrinth --help
-```
-
-Or activate the virtualenv first:
-
-```bash
-source .venv/bin/activate
-labyrinth --help
-```
-
-## Zsh Completions
-
-**Option 1** — Eval in your `.zshrc` (simplest):
-
-```bash
-eval "$(_LABYRINTH_COMPLETE=zsh_source labyrinth)"
-```
-
-**Option 2** — Install the completion file to your fpath:
-
-```bash
-mkdir -p ~/.zfunc
-cp completions/_labyrinth ~/.zfunc/_labyrinth
-```
-
-Then add to your `.zshrc` (before `compinit`):
-
-```bash
-fpath=(~/.zfunc $fpath)
-autoload -Uz compinit && compinit
 ```
 
 ## Getting Started
@@ -61,7 +28,7 @@ This creates `~/.labyrinth/` and initializes a project directory under `~/.labyr
 
 ### 2. Add targets
 
-Register datasources to your project:
+Register targets for your project:
 
 ```bash
 labyrinth add-target
@@ -75,7 +42,6 @@ An interactive fuzzy selector presents the available target types (more coming s
 | **AWS S3 Bucket** | account ID, region, bucket | AWS profile |
 | **Local Codebase** | path to directory | none |
 | **GitHub Repository** | org, repo | none |
-| **GitHub Organization** | org | GitHub token |
 
 After selecting a type you'll be prompted for the URN components and any required credentials. Repeat `add-target` for each target you want in the graph.
 
@@ -140,4 +106,13 @@ labyrinth visualize --port 9000
 ```bash
 labyrinth describe-project   # Print the active project's configuration
 labyrinth remove-target      # Interactively remove a target
+```
+
+
+## Zsh Completions
+
+Eval in your `.zshrc` (simplest):
+
+```bash
+eval "$(_LABYRINTH_COMPLETE=zsh_source labyrinth)"
 ```
