@@ -93,6 +93,11 @@ class PythonAnalyzer(LanguageAnalyzer):
 
         edges = edges + new_edges
         logger.info("Python analyzer: added %d CODE_TO_CODE edges", len(new_edges))
+
+        # Stdlib IO detection
+        from src.graph.loaders.codebase.resolvers.python_stdlib import enrich_stdlib_io
+        nodes = enrich_stdlib_io(nodes, file_sources)
+
         return nodes, edges
 
     def build_import_map(
