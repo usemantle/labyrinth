@@ -498,7 +498,7 @@ wheels = [
 ]
 
 [[package]]
-name = "labyrinth"
+name = "labyrinth-kb"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

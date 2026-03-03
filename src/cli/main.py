@@ -338,7 +338,7 @@ def visualize(port: int) -> None:
         )
 
     # Resolve the bundled visualize.html relative to this source file.
-    html_src = Path(__file__).resolve().parent.parent.parent / "scripts" / "visualize.html"
+    html_src = Path(__file__).resolve().parent / "visualize.html"
     if not html_src.exists():
         raise click.ClickException(f"Visualization template not found at {html_src}")
 

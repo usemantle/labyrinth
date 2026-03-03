@@ -4,14 +4,23 @@
 
 Labyrinth is an AI knowledge base that discovers code, databases, and cloud resources and stitches them into a queryable graph for your AI agent.
 
+![Labryinth Knowledge Graph](./resources/labyrinth_graph.png)
+
+
+
 ## Quick Start
 Currently we only support installing and running from source:
 
 ## Install
 Requires Python 3.13+.
+```
+uv tool install labyrinth-kb
+```
+
+OR install from source
 
 ```bash
-git clone <repo-url> && cd labyrinth
+git clone https://github.com/usemantle/labyrinth.git && cd labyrinth
 uv sync
 uv pip install -e .
 ```
@@ -98,8 +107,10 @@ This starts a local server and opens the graph viewer with:
 Use `--port` to change the default port (8787):
 
 ```bash
-labyrinth visualize --port 9000
+labyrinth visualize
 ```
+
+![Example Graph](./resources/example_graph.png)
 
 ### Managing your project
 

@@ -8,10 +8,8 @@ Concrete subclasses (OnPremPostgresLoader, etc.)
 provide URN construction via build_urn().
 """
 
-import importlib.resources
 import abc
 import logging
-import uuid
 
 from sqlalchemy.engine.url import make_url
 
