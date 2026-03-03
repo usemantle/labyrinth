@@ -1,11 +1,13 @@
-name: CI
+name: Publish to PyPi
 
 on:
   workflow_dispatch:
     branches: [main]
+permissions:
+  id-token: write
 
 jobs:
-  test:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
