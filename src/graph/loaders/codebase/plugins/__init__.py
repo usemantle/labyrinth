@@ -6,6 +6,7 @@ from src.graph.loaders.codebase.plugins.fastapi_plugin import FastAPIPlugin
 from src.graph.loaders.codebase.plugins.flask_plugin import FlaskPlugin
 from src.graph.loaders.codebase.plugins.requests_plugin import RequestsPlugin
 from src.graph.loaders.codebase.plugins.sqlalchemy_plugin import SQLAlchemyPlugin
+from src.graph.loaders.codebase.plugins.uv_plugin import UvPlugin
 
 __all__ = [
     "Boto3S3Plugin",
@@ -14,4 +15,5 @@ __all__ = [
     "FlaskPlugin",
     "RequestsPlugin",
     "SQLAlchemyPlugin",
+    "UvPlugin",
 ]

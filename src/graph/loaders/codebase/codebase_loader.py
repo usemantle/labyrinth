@@ -174,6 +174,7 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
             FlaskPlugin,
             RequestsPlugin,
             SQLAlchemyPlugin,
+            UvPlugin,
         )
         return {
             "sqlalchemy": SQLAlchemyPlugin,
@@ -181,6 +182,7 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
             "flask": FlaskPlugin,
             "requests": RequestsPlugin,
             "boto3-s3": Boto3S3Plugin,
+            "uv": UvPlugin,
         }
 
     # ------------------------------------------------------------------
