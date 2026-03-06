@@ -86,6 +86,9 @@ class NodeMetadataKey(str, enum.Enum):
     # ── ORM plugin ─────────────────────────────────────────────────
     ORM_TABLE = "orm_table"
     ORM_FRAMEWORK = "orm_framework"
+    ORM_OPERATIONS = "orm_operations"
+    ORM_OPERATION_TYPE = "orm_operation_type"
+    ORM_MODELS = "orm_models"
 
     # ── FastAPI plugin ──────────────────────────────────────────────
     HTTP_METHOD = "http_method"
@@ -93,6 +96,8 @@ class NodeMetadataKey(str, enum.Enum):
     FULL_ROUTE_PATH = "full_route_path"
     API_FRAMEWORK = "api_framework"
     ROUTER_VARIABLE = "router_variable"
+    AUTH_SCHEME = "auth_scheme"
+    AUTH_SCHEME_VAR = "auth_scheme_var"
 
     # ── Boto3 S3 plugin ──────────────────────────────────────────────
     AWS_S3_CLIENT = "aws_s3_client"

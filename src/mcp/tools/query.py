@@ -45,7 +45,8 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         metadata_key: str = "",
         metadata_value: str = "",
         limit: int = 50,
-    ) -> str:
+        offset: int = 0,
+    ) -> dict:
         """Search graph nodes by type, name, URN pattern, or metadata.
 
         Args:
@@ -57,13 +58,14 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             metadata_key: Filter to nodes that have this metadata key.
             metadata_value: If metadata_key is set, match this value substring.
             limit: Maximum results to return (default 50).
+            offset: Number of matching results to skip for pagination (default 0).
         """
         if node_type:
             candidate_urns = store.nodes_by_type.get(node_type, [])
         else:
             candidate_urns = list(store.G.nodes)
 
-        results = []
+        matched = []
         name_fields = [
             "table_name", "column_name", "schema_name", "class_name",
             "function_name", "file_path", "database_name", "repo_name",
@@ -76,11 +78,11 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             if urn_pattern and urn_pattern.lower() not in urn.lower():
                 continue
             if name_pattern:
-                matched = any(
+                hit = any(
                     name_pattern.lower() in str(meta.get(f, "")).lower()
                     for f in name_fields
                 )
-                if not matched:
+                if not hit:
                     continue
             if metadata_key:
                 val = meta.get(metadata_key)
@@ -89,18 +91,17 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                 if metadata_value and metadata_value.lower() not in str(val).lower():
                     continue
 
-            results.append(store.node_dict(urn))
-            if len(results) >= limit:
-                break
+            matched.append(urn)
 
-        if not results:
-            return "No nodes found matching the given criteria."
+        total = len(matched)
+        page = matched[offset:offset + limit]
+        remaining = max(0, total - offset - limit)
 
-        lines = [f"Found {len(results)} node(s):"]
-        for node in results:
-            lines.append("")
-            lines.append(_format_node(node, compact=False))
-        return "\n".join(lines)
+        return {
+            "nodes": [store.node_dict(urn) for urn in page],
+            "total": total,
+            "remaining": remaining,
+        }
 
     @mcp.tool()
     def get_node_details(urn: str) -> str:

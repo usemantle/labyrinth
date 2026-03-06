@@ -1,13 +1,17 @@
 """
 Unit tests for the SQLAlchemy codebase plugin.
 
-Verifies detection of __tablename__ in Python ORM classes.
+Verifies detection of __tablename__ in Python ORM classes,
+SQLAlchemy session operations in function bodies, and
+CODE_TO_CODE edges from functions to ORM classes.
 """
 
 import uuid
 
 from src.graph.graph_models import (
+    EdgeMetadataKey,
     NodeMetadataKey,
+    RelationType,
 )
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 from src.graph.loaders.codebase.plugins import SQLAlchemyPlugin
@@ -115,3 +119,269 @@ def test_sqlalchemy_plugin_multiple_models(tmp_path):
     assert len(orm_nodes) == 2
     tables = {n.metadata[NK.ORM_TABLE] for n in orm_nodes}
     assert tables == {"users", "orders"}
+
+
+# ── Operation detection tests ─────────────────────────────────────────
+
+
+def test_sqlalchemy_read_operations(tmp_path):
+    """Detects query() as a read operation."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "crud.py").write_text(
+        'def get_users(db):\n'
+        '    return db.query(User).all()\n'
+    )
+
+    loader = FileSystemCodebaseLoader(
+        organization_id=ORG_ID, plugins=[SQLAlchemyPlugin()],
+    )
+    nodes, _ = loader.load(str(repo))
+
+    func = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "get_users")
+    assert func.metadata[NK.ORM_OPERATIONS] == "query"
+    assert func.metadata[NK.ORM_OPERATION_TYPE] == "read"
+    assert func.metadata[NK.ORM_FRAMEWORK] == "sqlalchemy"
+
+
+def test_sqlalchemy_write_operations(tmp_path):
+    """Detects add() and commit() as write operations."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "crud.py").write_text(
+        'def create_user(db, user):\n'
+        '    db.add(user)\n'
+        '    db.commit()\n'
+    )
+
+    loader = FileSystemCodebaseLoader(
+        organization_id=ORG_ID, plugins=[SQLAlchemyPlugin()],
+    )
+    nodes, _ = loader.load(str(repo))
+
+    func = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "create_user")
+    assert func.metadata[NK.ORM_OPERATIONS] == "add,commit"
+    assert func.metadata[NK.ORM_OPERATION_TYPE] == "write"
+
+
+def test_sqlalchemy_delete_operation(tmp_path):
+    """Detects db.delete() as a delete operation."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "crud.py").write_text(
+        'def remove_user(db, user):\n'
+        '    db.delete(user)\n'
+        '    db.commit()\n'
+    )
+
+    loader = FileSystemCodebaseLoader(
+        organization_id=ORG_ID, plugins=[SQLAlchemyPlugin()],
+    )
+    nodes, _ = loader.load(str(repo))
+
+    func = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "remove_user")
+    assert func.metadata[NK.ORM_OPERATIONS] == "commit,delete"
+    assert func.metadata[NK.ORM_OPERATION_TYPE] == "delete,write"
+
+
+def test_sqlalchemy_filter_delete(tmp_path):
+    """Detects .filter(...).delete() as a delete operation."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "crud.py").write_text(
+        'def purge_old(db):\n'
+        '    db.query(User).filter(User.active == False).delete()\n'
+        '    db.commit()\n'
+    )
+
+    loader = FileSystemCodebaseLoader(
+        organization_id=ORG_ID, plugins=[SQLAlchemyPlugin()],
+    )
+    nodes, _ = loader.load(str(repo))
+
+    func = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "purge_old")
+    assert "delete" in func.metadata[NK.ORM_OPERATIONS]
+    assert "delete" in func.metadata[NK.ORM_OPERATION_TYPE]
+
+
+def test_sqlalchemy_mixed_read_write(tmp_path):
+    """Function with both read and write operations gets both types."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "crud.py").write_text(
+        'def upsert_user(db, data):\n'
+        '    existing = db.query(User).get(data["id"])\n'
+        '    if not existing:\n'
+        '        db.add(User(**data))\n'
+        '    db.commit()\n'
+    )
+
+    loader = FileSystemCodebaseLoader(
+        organization_id=ORG_ID, plugins=[SQLAlchemyPlugin()],
+    )
+    nodes, _ = loader.load(str(repo))
+
+    func = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "upsert_user")
+    assert func.metadata[NK.ORM_OPERATION_TYPE] == "read,write"
+
+
+def test_sqlalchemy_no_orm_ops_no_tagging(tmp_path):
+    """Functions without ORM operations should not get orm metadata."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "utils.py").write_text(
+        'def format_name(name):\n'
+        '    return name.strip().title()\n'
+    )
+
+    loader = FileSystemCodebaseLoader(
+        organization_id=ORG_ID, plugins=[SQLAlchemyPlugin()],
+    )
+    nodes, _ = loader.load(str(repo))
+
+    func = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "format_name")
+    assert NK.ORM_OPERATIONS not in func.metadata
+    assert NK.ORM_OPERATION_TYPE not in func.metadata
+
+
+def test_sqlalchemy_operations_ignored_for_non_python(tmp_path):
+    """Operation detection should not fire for non-Python files."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "crud.js").write_text(
+        'function getUsers(db) {\n'
+        '    return db.query("SELECT * FROM users")\n'
+        '}\n'
+    )
+
+    loader = FileSystemCodebaseLoader(
+        organization_id=ORG_ID, plugins=[SQLAlchemyPlugin()],
+    )
+    nodes, _ = loader.load(str(repo))
+
+    func = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "getUsers")
+    assert NK.ORM_OPERATIONS not in func.metadata
+
+
+# ── CODE_TO_CODE edge tests ──────────────────────────────────────────
+
+EK = EdgeMetadataKey
+
+
+def test_sqlalchemy_function_links_to_orm_class(tmp_path):
+    """db.query(User) creates CODE_TO_CODE edge to User class node."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "models.py").write_text(
+        'class User:\n'
+        '    __tablename__ = "users"\n'
+        '    id: int\n'
+    )
+    (repo / "crud.py").write_text(
+        'def get_users(db):\n'
+        '    return db.query(User).all()\n'
+    )
+
+    loader = FileSystemCodebaseLoader(
+        organization_id=ORG_ID, plugins=[SQLAlchemyPlugin()],
+    )
+    nodes, edges = loader.load(str(repo))
+
+    func = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "get_users")
+    user_cls = next(n for n in nodes if n.metadata.get(NK.CLASS_NAME) == "User")
+
+    assert func.metadata[NK.ORM_MODELS] == "User"
+
+    c2c = [e for e in edges if e.relation_type == RelationType.CODE_TO_CODE
+           and e.from_urn == func.urn and e.to_urn == user_cls.urn]
+    assert len(c2c) == 1
+    assert c2c[0].metadata[EK.DETECTION_METHOD] == "orm_model_reference"
+    assert c2c[0].metadata[EK.CONFIDENCE] == 0.9
+    assert c2c[0].metadata[EK.ORM_FRAMEWORK] == "sqlalchemy"
+    assert c2c[0].metadata[EK.ORM_CLASS] == "User"
+
+
+def test_sqlalchemy_function_links_to_multiple_models(tmp_path):
+    """Function referencing User and Order gets edges to each."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "models.py").write_text(
+        'class User:\n'
+        '    __tablename__ = "users"\n'
+        '\n'
+        'class Order:\n'
+        '    __tablename__ = "orders"\n'
+    )
+    (repo / "crud.py").write_text(
+        'def get_user_orders(db, user_id):\n'
+        '    user = db.query(User).get(user_id)\n'
+        '    orders = db.query(Order).filter(Order.user_id == user_id).all()\n'
+        '    return user, orders\n'
+    )
+
+    loader = FileSystemCodebaseLoader(
+        organization_id=ORG_ID, plugins=[SQLAlchemyPlugin()],
+    )
+    nodes, edges = loader.load(str(repo))
+
+    func = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "get_user_orders")
+    assert func.metadata[NK.ORM_MODELS] == "Order,User"
+
+    c2c = [e for e in edges if e.relation_type == RelationType.CODE_TO_CODE
+           and e.from_urn == func.urn]
+    assert len(c2c) == 2
+    linked_classes = {e.metadata[EK.ORM_CLASS] for e in c2c}
+    assert linked_classes == {"User", "Order"}
+
+
+def test_sqlalchemy_no_edge_when_no_class_reference(tmp_path):
+    """Function with ORM ops but no class name → no CODE_TO_CODE edges."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "models.py").write_text(
+        'class User:\n'
+        '    __tablename__ = "users"\n'
+    )
+    (repo / "crud.py").write_text(
+        'def do_commit(db):\n'
+        '    db.commit()\n'
+    )
+
+    loader = FileSystemCodebaseLoader(
+        organization_id=ORG_ID, plugins=[SQLAlchemyPlugin()],
+    )
+    nodes, edges = loader.load(str(repo))
+
+    func = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "do_commit")
+    assert NK.ORM_MODELS not in func.metadata
+
+    c2c = [e for e in edges if e.relation_type == RelationType.CODE_TO_CODE
+           and e.from_urn == func.urn]
+    assert len(c2c) == 0
+
+
+def test_sqlalchemy_no_scan_without_orm_operations(tmp_path):
+    """Function without ORM operations but mentioning a class → no false positive."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "models.py").write_text(
+        'class User:\n'
+        '    __tablename__ = "users"\n'
+    )
+    (repo / "utils.py").write_text(
+        'def make_user_dict(User):\n'
+        '    return {"name": User.name}\n'
+    )
+
+    loader = FileSystemCodebaseLoader(
+        organization_id=ORG_ID, plugins=[SQLAlchemyPlugin()],
+    )
+    nodes, edges = loader.load(str(repo))
+
+    func = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "make_user_dict")
+    assert NK.ORM_MODELS not in func.metadata
+    assert NK.ORM_OPERATIONS not in func.metadata
+
+    c2c = [e for e in edges if e.relation_type == RelationType.CODE_TO_CODE
+           and e.from_urn == func.urn]
+    assert len(c2c) == 0
