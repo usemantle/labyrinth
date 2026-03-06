@@ -18,7 +18,9 @@ from src.drivers.sql.models import (
     ColumnMetadata,
     ConstraintMetadata,
     ForeignKeyMetadata,
+    GrantMetadata,
     IndexMetadata,
+    RoleMetadata,
     ComplianceQueryResult,
     PKSelectQuery,
 )
@@ -286,6 +288,14 @@ class BaseDiscoveryDriver(abc.ABC):
             List of IndexMetadata for discovered indexes
         """
         pass
+
+    def discover_roles(self, database_name: str) -> List[RoleMetadata]:
+        """Discover database roles. Override in subclasses that support it."""
+        return []
+
+    def discover_grants(self) -> List[GrantMetadata]:
+        """Discover table-level grants. Override in subclasses that support it."""
+        return []
 
     @abc.abstractmethod
     def sample_column_data(

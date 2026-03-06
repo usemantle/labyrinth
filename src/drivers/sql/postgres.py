@@ -18,7 +18,9 @@ from src.drivers.sql.models import (
     ColumnMetadata,
     ConstraintMetadata,
     ForeignKeyMetadata,
+    GrantMetadata,
     IndexMetadata,
+    RoleMetadata,
 )
 
 logger = logging.getLogger(__name__)
@@ -256,6 +258,46 @@ class PostgresDiscoveryDriver(BaseDiscoveryDriver):
                 for col in columns_str.split(",")
             ]
         return []
+
+    def discover_roles(self, database_name: str) -> List[RoleMetadata]:
+        """Discover PostgreSQL roles (excluding system roles)."""
+        with self.engine.connect() as conn:
+            query = text("""
+                SELECT rolname, rolcanlogin, rolsuper
+                FROM pg_roles
+                WHERE rolname NOT LIKE 'pg_%'
+                ORDER BY rolname
+            """)
+            result = conn.execute(query).fetchall()
+            return [
+                RoleMetadata(
+                    role_name=row[0],
+                    can_login=row[1],
+                    is_superuser=row[2],
+                )
+                for row in result
+            ]
+
+    def discover_grants(self) -> List[GrantMetadata]:
+        """Discover table-level grants (excluding system schemas)."""
+        with self.engine.connect() as conn:
+            query = text("""
+                SELECT grantee, table_schema, table_name, privilege_type, is_grantable
+                FROM information_schema.role_table_grants
+                WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+                ORDER BY grantee, table_schema, table_name, privilege_type
+            """)
+            result = conn.execute(query).fetchall()
+            return [
+                GrantMetadata(
+                    grantee=row[0],
+                    table_schema=row[1],
+                    table_name=row[2],
+                    privilege_type=row[3],
+                    is_grantable=row[4] == "YES",
+                )
+                for row in result
+            ]
 
     def sample_column_data(
         self,
