@@ -37,6 +37,7 @@ class RelationType(str, enum.Enum):
     DATA_TO_DATA = "DATA_TO_DATA"
     CODE_TO_DATA = "CODE_TO_DATA"
     CODE_TO_CODE = "CODE_TO_CODE"
+    DEPENDS_ON = "DEPENDS_ON"
     PRINCIPAL_TO_DATA = "PRINCIPAL_TO_DATA"
 
 
@@ -110,6 +111,11 @@ class NodeMetadataKey(str, enum.Enum):
     CVE_IDS = "cve_ids"
     DATA_SENSITIVITY = "data_sensitivity"
 
+    # ── Database roles ────────────────────────────────────────────────
+    ROLE_NAME = "role_name"
+    ROLE_LOGIN = "role_login"
+    ROLE_SUPERUSER = "role_superuser"
+
     # ── Dependency management ────────────────────────────────────────
     PACKAGE_NAME = "package_name"
     PACKAGE_VERSION = "package_version"
@@ -143,6 +149,12 @@ class EdgeMetadataKey(str, enum.Enum):
 
     # ── Code-to-code linking ────────────────────────────────────────
     CALL_TYPE = "call_type"
+
+    # ── Dependency linking ───────────────────────────────────────────
+    IMPORT_NAME = "import_name"
+
+    # ── Database grants ──────────────────────────────────────────────
+    PRIVILEGE = "privilege"
 
 
 class _EnumKeyDict:
