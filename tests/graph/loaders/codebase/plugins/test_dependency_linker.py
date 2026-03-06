@@ -2,19 +2,14 @@
 
 import uuid
 from pathlib import Path
-from unittest.mock import patch
-
-import pytest
 
 from src.graph.graph_models import (
-    Edge,
+    URN,
     Node,
     NodeMetadata,
     NodeMetadataKey,
     RelationType,
-    URN,
 )
-from src.graph.loaders._helpers import make_edge
 from src.graph.loaders.codebase.codebase_loader import PostProcessContext
 from src.graph.loaders.codebase.plugins.dependency_linker import (
     DependencyLinkerPlugin,
@@ -64,7 +59,7 @@ def _make_context(file_sources: dict[str, str]) -> PostProcessContext:
         root_name="myapp",
         organization_id=ORG_ID,
         file_sources=file_sources,
-        file_languages={k: "python" for k in file_sources},
+        file_languages=dict.fromkeys(file_sources, "python"),
         build_urn=_build_urn,
     )
 

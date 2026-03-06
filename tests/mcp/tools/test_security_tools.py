@@ -2,13 +2,12 @@
 
 import json
 import os
-import tempfile
 import uuid
 
-import pytest
+from mcp.server.fastmcp import FastMCP
 
 from src.mcp.graph_store import GraphStore
-
+from src.mcp.tools.security import register
 
 ORG_ID = str(uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"))
 
@@ -30,12 +29,17 @@ def _write_graph(tmp_path, nodes, edges):
     return path
 
 
+def _get_tool(store, tool_name):
+    mcp = FastMCP("test")
+    register(mcp, store)
+    return mcp._tool_manager._tools[tool_name].fn
+
+
 def _make_store_with_sensitive_data(tmp_path):
     """Create a store with a table that has sensitive columns and code accessing it."""
     table_urn = "urn:test:db:::mydb/public/users"
     col_urn = "urn:test:db:::mydb/public/users/email"
     func_urn = "urn:github:repo:::myapp/src/api.py/get_user"
-    edge_uuid = str(uuid.uuid4())
 
     nodes = [
         {
@@ -70,7 +74,7 @@ def _make_store_with_sensitive_data(tmp_path):
             "metadata": {},
         },
         {
-            "uuid": edge_uuid,
+            "uuid": str(uuid.uuid4()),
             "organization_id": ORG_ID,
             "from_urn": func_urn,
             "to_urn": table_urn,
@@ -83,61 +87,36 @@ def _make_store_with_sensitive_data(tmp_path):
     return GraphStore(path)
 
 
-@pytest.fixture
-def sensitive_store(tmp_path):
-    return _make_store_with_sensitive_data(tmp_path)
-
-
 class TestFindSensitiveData:
-    def test_returns_tagged_nodes(self, sensitive_store):
-        from src.mcp.tools.security import register
-        from mcp.server.fastmcp import FastMCP
-
-        mcp = FastMCP("test")
-        register(mcp, sensitive_store)
-
-        # Call the tool function directly
-        result = mcp._tool_manager._tools["find_sensitive_data"].fn(category="")
+    def test_returns_tagged_nodes(self, tmp_path):
+        store = _make_store_with_sensitive_data(tmp_path)
+        fn = _get_tool(store, "find_sensitive_data")
+        result = fn(category="")
         assert "email" in result
         assert "pii.email" in result
 
-    def test_filters_by_category(self, sensitive_store):
-        from src.mcp.tools.security import register
-        from mcp.server.fastmcp import FastMCP
-
-        mcp = FastMCP("test")
-        register(mcp, sensitive_store)
-
-        result = mcp._tool_manager._tools["find_sensitive_data"].fn(category="secret")
+    def test_filters_by_category(self, tmp_path):
+        store = _make_store_with_sensitive_data(tmp_path)
+        fn = _get_tool(store, "find_sensitive_data")
+        result = fn(category="secret")
         assert "No sensitive data found" in result
 
-    def test_pii_category_matches(self, sensitive_store):
-        from src.mcp.tools.security import register
-        from mcp.server.fastmcp import FastMCP
-
-        mcp = FastMCP("test")
-        register(mcp, sensitive_store)
-
-        result = mcp._tool_manager._tools["find_sensitive_data"].fn(category="pii")
+    def test_pii_category_matches(self, tmp_path):
+        store = _make_store_with_sensitive_data(tmp_path)
+        fn = _get_tool(store, "find_sensitive_data")
+        result = fn(category="pii")
         assert "pii.email" in result
 
 
 class TestTraceSensitiveDataAccess:
-    def test_shows_code(self, sensitive_store):
-        from src.mcp.tools.security import register
-        from mcp.server.fastmcp import FastMCP
-
-        mcp = FastMCP("test")
-        register(mcp, sensitive_store)
-
-        result = mcp._tool_manager._tools["trace_sensitive_data_access"].fn(table_name="users")
+    def test_shows_code(self, tmp_path):
+        store = _make_store_with_sensitive_data(tmp_path)
+        fn = _get_tool(store, "trace_sensitive_data_access")
+        result = fn(table_name="users")
         assert "get_user" in result
         assert "pii.email" in result
 
     def test_no_sensitive_columns(self, tmp_path):
-        from src.mcp.tools.security import register
-        from mcp.server.fastmcp import FastMCP
-
         nodes = [{
             "urn": "urn:test:db:::mydb/public/logs",
             "organization_id": ORG_ID,
@@ -147,9 +126,6 @@ class TestTraceSensitiveDataAccess:
         }]
         path = _write_graph(tmp_path, nodes, [])
         store = GraphStore(path)
-
-        mcp = FastMCP("test")
-        register(mcp, store)
-
-        result = mcp._tool_manager._tools["trace_sensitive_data_access"].fn(table_name="logs")
+        fn = _get_tool(store, "trace_sensitive_data_access")
+        result = fn(table_name="logs")
         assert "No sensitive columns found" in result

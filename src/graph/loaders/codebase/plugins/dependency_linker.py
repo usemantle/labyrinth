@@ -7,8 +7,8 @@ DEPENDS_ON edges from file nodes to matching dependency nodes.
 
 from __future__ import annotations
 
-import re
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from src.graph.graph_models import (

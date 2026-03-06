@@ -2,14 +2,12 @@
 
 import uuid
 
-import pytest
-
-from src.graph.graph_models import Node, NodeMetadata, NodeMetadataKey, URN
 from src.graph.enrichment.sensitivity_classifier import (
     classify_column_name,
     classify_s3_path,
     enrich_sensitivity,
 )
+from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
 
 NK = NodeMetadataKey
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")

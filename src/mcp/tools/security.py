@@ -10,10 +10,82 @@ Provides tools for:
 from __future__ import annotations
 
 import collections
+from typing import TYPE_CHECKING
 
 from mcp.server.fastmcp import FastMCP
 
-from src.mcp.graph_store import GraphStore
+if TYPE_CHECKING:
+    from src.mcp.graph_store import GraphStore
+
+
+def _bfs(
+    store: GraphStore,
+    start: str,
+    max_depth: int,
+    follow_types: set[str],
+    *,
+    reverse: bool = False,
+) -> dict[str, int]:
+    """BFS traversal returning {urn: depth} for all reachable nodes.
+
+    When reverse=True, follows incoming edges instead of outgoing.
+    """
+    visited: dict[str, int] = {}
+    queue = collections.deque([(start, 0)])
+
+    while queue:
+        current, depth = queue.popleft()
+        if current in visited or depth > max_depth:
+            continue
+        visited[current] = depth
+
+        edges = store.G.in_edges(current, data=True) if reverse else store.G.out_edges(current, data=True)
+        for edge in edges:
+            neighbor = edge[0] if reverse else edge[1]
+            if edge[2].get("relation_type") in follow_types and neighbor not in visited:
+                queue.append((neighbor, depth + 1))
+
+    return visited
+
+
+def _node_label(node: dict) -> str:
+    """Extract a human-readable label from a node dict."""
+    meta = node["metadata"]
+    return (
+        meta.get("function_name")
+        or meta.get("class_name")
+        or meta.get("table_name")
+        or meta.get("column_name")
+        or meta.get("path_pattern")
+        or meta.get("role_name")
+        or node["urn"]
+    )
+
+
+def _code_label(node: dict) -> str:
+    """Format a code node as 'name in file_path'."""
+    meta = node["metadata"]
+    name = meta.get("function_name") or meta.get("class_name", "?")
+    fp = meta.get("file_path", "?")
+    return f"{name} in {fp}"
+
+
+def _find_dep_node(store: GraphStore, package_name: str) -> str | None:
+    """Find a dependency node URN by package name (case-insensitive)."""
+    for urn in store.nodes_by_type.get("dependency", []):
+        meta = store.G.nodes[urn].get("metadata", {})
+        if meta.get("package_name", "").lower() == package_name.lower():
+            return urn
+    return None
+
+
+def _incoming_depends_on(store: GraphStore, dep_urn: str) -> list[tuple[str, dict]]:
+    """Find all incoming DEPENDS_ON edges to a dependency node."""
+    return [
+        (from_urn, data)
+        for from_urn, _, data in store.G.in_edges(dep_urn, data=True)
+        if data.get("relation_type") == "DEPENDS_ON"
+    ]
 
 
 def register(mcp: FastMCP, store: GraphStore) -> None:
@@ -35,9 +107,8 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             if not sensitivity:
                 continue
             tags = sensitivity.split(",")
-            if category:
-                if not any(t.startswith(category) for t in tags):
-                    continue
+            if category and not any(t.startswith(category) for t in tags):
+                continue
             node = store.node_dict(urn)
             if node:
                 results.append(node)
@@ -48,7 +119,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         lines = [f"Sensitive data nodes ({len(results)} found):"]
         for node in results:
             meta = node["metadata"]
-            label = meta.get("column_name") or meta.get("table_name") or meta.get("path_pattern") or node["urn"]
+            label = _node_label(node)
             parent_info = ""
             if meta.get("column_name") and node.get("parent_urn"):
                 parent = store.node_dict(node["parent_urn"])
@@ -83,8 +154,8 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                 sensitive_cols.append(col_node)
 
         # Find code accessing this table
-        code_edges = [
-            (from_urn, data)
+        code_urns = [
+            from_urn
             for from_urn, _, data in store.G.in_edges(table_urn, data=True)
             if data.get("relation_type") == "CODE_TO_DATA"
         ]
@@ -99,14 +170,12 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         else:
             lines.append("  No sensitive columns found.")
 
-        if code_edges:
-            lines.append(f"\n  Code accessing this table ({len(code_edges)}):")
-            for from_urn, data in code_edges:
+        if code_urns:
+            lines.append(f"\n  Code accessing this table ({len(code_urns)}):")
+            for from_urn in code_urns:
                 source = store.node_dict(from_urn)
                 if source:
-                    func = source["metadata"].get("function_name") or source["metadata"].get("class_name", "?")
-                    fp = source["metadata"].get("file_path", "?")
-                    lines.append(f"    {func} in {fp}")
+                    lines.append(f"    {_code_label(source)}")
         else:
             lines.append("\n  No code references found.")
 
@@ -121,14 +190,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         Args:
             package_name: The package name (e.g. 'requests', 'flask').
         """
-        # Find dependency node
-        dep_urn = None
-        for urn in store.nodes_by_type.get("dependency", []):
-            meta = store.G.nodes[urn].get("metadata", {})
-            if meta.get("package_name", "").lower() == package_name.lower():
-                dep_urn = urn
-                break
-
+        dep_urn = _find_dep_node(store, package_name)
         if not dep_urn:
             return f"No dependency found with name '{package_name}'."
 
@@ -139,13 +201,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         if cve_ids:
             lines.append(f"  WARNING - Known CVEs: {cve_ids}")
 
-        # Find incoming DEPENDS_ON edges
-        dep_edges = [
-            (from_urn, data)
-            for from_urn, _, data in store.G.in_edges(dep_urn, data=True)
-            if data.get("relation_type") == "DEPENDS_ON"
-        ]
-
+        dep_edges = _incoming_depends_on(store, dep_urn)
         if dep_edges:
             lines.append(f"\n  Files importing this package ({len(dep_edges)}):")
             for from_urn, data in dep_edges:
@@ -179,14 +235,10 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             lines.append(f"\n  {pkg}=={ver}")
             lines.append(f"    CVEs: {cves}")
 
-            dep_edges = [
-                (from_urn, data)
-                for from_urn, _, data in store.G.in_edges(dep_urn, data=True)
-                if data.get("relation_type") == "DEPENDS_ON"
-            ]
+            dep_edges = _incoming_depends_on(store, dep_urn)
             if dep_edges:
                 lines.append(f"    Affected files ({len(dep_edges)}):")
-                for from_urn, data in dep_edges:
+                for from_urn, _data in dep_edges:
                     source = store.node_dict(from_urn)
                     if source:
                         fp = source["metadata"].get("file_path", source["urn"])
@@ -269,20 +321,8 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             return f"No node found with URN: {urn}"
 
         follow_types = {"CODE_TO_CODE", "CODE_TO_DATA", "DATA_TO_DATA", "DEPENDS_ON", "CONTAINS"}
-        visited: dict[str, int] = {}
-        queue = collections.deque([(urn, 0)])
+        visited = _bfs(store, urn, max_depth, follow_types)
 
-        while queue:
-            current, depth = queue.popleft()
-            if current in visited or depth > max_depth:
-                continue
-            visited[current] = depth
-
-            for _, to_urn, data in store.G.out_edges(current, data=True):
-                if data.get("relation_type") in follow_types and to_urn not in visited:
-                    queue.append((to_urn, depth + 1))
-
-        # Group results
         code_nodes = []
         data_nodes = []
         dep_nodes = []
@@ -311,7 +351,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                     cve_count += 1
 
         start_node = store.node_dict(urn)
-        start_label = start_node["metadata"].get("function_name") or start_node["metadata"].get("table_name") or urn if start_node else urn
+        start_label = _node_label(start_node) if start_node else urn
 
         lines = [f"Blast radius from '{start_label}':"]
         lines.append(f"  Total reachable: {len(visited) - 1} nodes")
@@ -321,10 +361,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         if code_nodes:
             lines.append(f"\n  Directly affected code ({len(code_nodes)}):")
             for node, depth in sorted(code_nodes, key=lambda x: x[1]):
-                meta = node["metadata"]
-                name = meta.get("function_name") or meta.get("class_name", "?")
-                fp = meta.get("file_path", "?")
-                lines.append(f"    [depth={depth}] {name} in {fp}")
+                lines.append(f"    [depth={depth}] {_code_label(node)}")
 
         if data_nodes:
             lines.append(f"\n  Data at risk ({len(data_nodes)}):")
@@ -360,20 +397,8 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             return f"No node found with URN: {urn}"
 
         follow_types = {"CODE_TO_DATA", "CODE_TO_CODE", "PRINCIPAL_TO_DATA", "CONTAINS"}
-        visited: dict[str, int] = {}
-        queue = collections.deque([(urn, 0)])
+        visited = _bfs(store, urn, max_depth, follow_types, reverse=True)
 
-        while queue:
-            current, depth = queue.popleft()
-            if current in visited or depth > max_depth:
-                continue
-            visited[current] = depth
-
-            for from_urn, _, data in store.G.in_edges(current, data=True):
-                if data.get("relation_type") in follow_types and from_urn not in visited:
-                    queue.append((from_urn, depth + 1))
-
-        # Group results
         code_paths = []
         principals = []
         endpoints = []
@@ -396,7 +421,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                     endpoints.append((node, depth))
 
         start_node = store.node_dict(urn)
-        start_label = start_node["metadata"].get("table_name") or start_node["metadata"].get("column_name") or urn if start_node else urn
+        start_label = _node_label(start_node) if start_node else urn
 
         lines = [f"Reverse blast radius for '{start_label}':"]
         lines.append(f"  Total upstream nodes: {len(visited) - 1}")
@@ -404,10 +429,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         if code_paths:
             lines.append(f"\n  Code paths to this data ({len(code_paths)}):")
             for node, depth in sorted(code_paths, key=lambda x: x[1]):
-                meta = node["metadata"]
-                name = meta.get("function_name") or meta.get("class_name", "?")
-                fp = meta.get("file_path", "?")
-                lines.append(f"    [depth={depth}] {name} in {fp}")
+                lines.append(f"    [depth={depth}] {_code_label(node)}")
 
         if principals:
             lines.append(f"\n  Principals with access ({len(principals)}):")

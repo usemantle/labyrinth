@@ -1,12 +1,18 @@
 """Unit tests for the UV lockfile plugin."""
 
+import json
+import os
 import uuid
 from unittest.mock import patch
+
+from mcp.server.fastmcp import FastMCP
 
 from src.graph.graph_models import NodeMetadataKey, RelationType
 from src.graph.loaders.codebase.cve.osv_client import OsvResult
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 from src.graph.loaders.codebase.plugins import UvPlugin
+from src.mcp.graph_store import GraphStore
+from src.mcp.tools.security import register
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey
@@ -237,12 +243,6 @@ def test_no_transitive_edges_without_dependencies(mock_osv, tmp_path):
 @patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_transitive_cve_reachable_via_blast_radius(mock_osv, tmp_path):
     """blast_radius from a file importing python-jose reaches cryptography's CVE."""
-    import json
-    import os
-    from mcp.server.fastmcp import FastMCP
-    from src.mcp.graph_store import GraphStore
-    from src.mcp.tools.security import register
-
     def osv_side_effect(name, version, ecosystem):
         if name == "cryptography":
             return OsvResult(cve_ids=["CVE-2026-26007"])
@@ -287,9 +287,9 @@ def test_transitive_cve_reachable_via_blast_radius(mock_osv, tmp_path):
         json.dump(graph_data, f)
 
     store = GraphStore(graph_path)
-    mcp_app = FastMCP("test")
-    register(mcp_app, store)
-    blast_fn = mcp_app._tool_manager._tools["blast_radius"].fn
+    mcp = FastMCP("test")
+    register(mcp, store)
+    blast_fn = mcp._tool_manager._tools["blast_radius"].fn
 
     # Find the python-jose dep node URN
     jose = _find_dep(nodes, "python-jose")

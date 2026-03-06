@@ -5,8 +5,10 @@ import os
 import uuid
 
 import pytest
+from mcp.server.fastmcp import FastMCP
 
 from src.mcp.graph_store import GraphStore
+from src.mcp.tools.security import register
 
 ORG_ID = str(uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"))
 
@@ -102,8 +104,6 @@ def blast_store(tmp_path):
 
 
 def _get_tool(store, tool_name):
-    from mcp.server.fastmcp import FastMCP
-    from src.mcp.tools.security import register
     mcp = FastMCP("test")
     register(mcp, store)
     return mcp._tool_manager._tools[tool_name].fn

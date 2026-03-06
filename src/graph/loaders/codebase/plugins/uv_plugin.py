@@ -102,7 +102,7 @@ class UvPlugin(CodebasePlugin):
 
         # Build transitive DEPENDS_ON edges between dependency nodes
         # Map package name → URN for quick lookup
-        dep_urn_map: dict[str, URN] = {
+        dep_urn_map = {
             pkg.get("name", ""): context.build_urn(context.root_name, f"dep/{pkg.get('name', '')}")
             for pkg in packages
             if pkg.get("name") and pkg.get("version")
