@@ -1,17 +1,19 @@
-"""Dependency linker plugin for connecting code files to dependency nodes.
+"""ABC for dependency linker plugins.
 
-After the UV plugin creates dependency nodes with PACKAGE_NAME metadata,
-this plugin scans Python file sources for import statements and creates
-DEPENDS_ON edges from file nodes to matching dependency nodes.
+Dependency linkers connect code files to dependency nodes via DEPENDS_ON
+edges. The base class handles the shared logic of matching imports to
+dependency nodes; subclasses provide language-specific import extraction
+and package-to-import-name resolution.
 """
 
 from __future__ import annotations
 
+import abc
 import logging
-import re
 from typing import TYPE_CHECKING
 
 from src.graph.graph_models import (
+    URN,
     Edge,
     EdgeMetadata,
     EdgeMetadataKey,
@@ -30,35 +32,43 @@ logger = logging.getLogger(__name__)
 NK = NodeMetadataKey
 EK = EdgeMetadataKey
 
-# Known PyPI package → import name mismatches
-_PACKAGE_TO_IMPORT: dict[str, str] = {
-    "pillow": "PIL",
-    "python-dateutil": "dateutil",
-    "beautifulsoup4": "bs4",
-    "scikit-learn": "sklearn",
-    "pyyaml": "yaml",
-    "python-dotenv": "dotenv",
-    "python-jose": "jose",
-    "python-multipart": "multipart",
-    "opencv-python": "cv2",
-    "attrs": "attr",
-}
 
-# Regex for top-level imports
-_IMPORT_RE = re.compile(r"^import\s+(\w+)", re.MULTILINE)
-_FROM_IMPORT_RE = re.compile(r"^from\s+(\w+)", re.MULTILINE)
+class DependencyLinkerPlugin(CodebasePlugin, abc.ABC):
+    """Base class for language-specific dependency linkers.
 
+    Subclasses must implement:
+    - ``language``: the language identifier (e.g. ``"python"``)
+    - ``extract_imports``: parse import names from source code
+    - ``resolve_import_names``: map a package name to its import name(s)
+    """
 
-def _normalize_package_to_import(package_name: str) -> str:
-    """Convert a PyPI package name to its Python import name."""
-    lower = package_name.lower()
-    if lower in _PACKAGE_TO_IMPORT:
-        return _PACKAGE_TO_IMPORT[lower]
-    return lower.replace("-", "_")
+    @abc.abstractmethod
+    def language(self) -> str:
+        """Return the language this linker supports (e.g. 'python')."""
 
+    @abc.abstractmethod
+    def extract_imports(self, source: str) -> set[str]:
+        """Extract top-level import names from a source file.
 
-class DependencyLinkerPlugin(CodebasePlugin):
-    """Links code files to dependency nodes via DEPENDS_ON edges."""
+        Returns:
+            Set of lowercased import module names.
+        """
+
+    @abc.abstractmethod
+    def resolve_import_names(
+        self,
+        package_name: str,
+        context: PostProcessContext,
+    ) -> set[str]:
+        """Map a package name to the import name(s) it provides.
+
+        Args:
+            package_name: The distribution/package name (e.g. 'Pillow').
+            context: Post-processing context with root_path, etc.
+
+        Returns:
+            Set of lowercased import names (e.g. {'pil'} for Pillow).
+        """
 
     def post_process(
         self,
@@ -66,13 +76,13 @@ class DependencyLinkerPlugin(CodebasePlugin):
         edges: list[Edge],
         context: PostProcessContext,
     ) -> tuple[list[Node], list[Edge]]:
-        # Step 1: Collect dependency nodes
+        # Step 1: Build import_name → dep_node mapping
         dep_map: dict[str, Node] = {}
         for node in nodes:
             pkg_name = node.metadata.get(NK.PACKAGE_NAME)
             if pkg_name:
-                import_name = _normalize_package_to_import(pkg_name)
-                dep_map[import_name.lower()] = node
+                for import_name in self.resolve_import_names(pkg_name, context):
+                    dep_map[import_name.lower()] = node
 
         if not dep_map:
             return nodes, edges
@@ -84,31 +94,24 @@ class DependencyLinkerPlugin(CodebasePlugin):
             if fp and NK.FUNCTION_NAME not in node.metadata and NK.CLASS_NAME not in node.metadata:
                 file_urn_map[fp] = str(node.urn)
 
-        # Step 3: Scan Python files for imports
+        # Step 3: Scan files for imports and create DEPENDS_ON edges
         new_edges: list[Edge] = []
         linked = 0
+        lang = self.language()
 
         for rel_path, source in context.file_sources.items():
-            lang = context.file_languages.get(rel_path)
-            if lang != "python":
+            if context.file_languages.get(rel_path) != lang:
                 continue
 
             file_urn_str = file_urn_map.get(rel_path)
             if not file_urn_str:
                 continue
 
-            # Extract top-level import names
-            import_names: set[str] = set()
-            for match in _IMPORT_RE.finditer(source):
-                import_names.add(match.group(1).lower())
-            for match in _FROM_IMPORT_RE.finditer(source):
-                import_names.add(match.group(1).lower())
+            import_names = self.extract_imports(source)
 
-            # Match against dependency nodes
             for import_name in import_names:
                 dep_node = dep_map.get(import_name)
                 if dep_node:
-                    from src.graph.graph_models import URN
                     edge = make_edge(
                         context.organization_id,
                         URN(file_urn_str),
@@ -121,5 +124,5 @@ class DependencyLinkerPlugin(CodebasePlugin):
                     new_edges.append(edge)
                     linked += 1
 
-        logger.info("Dependency linker: created %d DEPENDS_ON edges", linked)
+        logger.info("Dependency linker [%s]: created %d DEPENDS_ON edges", lang, linked)
         return nodes, edges + new_edges

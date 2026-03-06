@@ -266,8 +266,8 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
 
         # 2c. Automatic dependency linking (runs after all plugins so
         #     dependency nodes from UV/etc. are available)
-        from src.graph.loaders.codebase.plugins.dependency_linker import DependencyLinkerPlugin
-        nodes, edges = DependencyLinkerPlugin().post_process(nodes, edges, ctx)
+        from src.graph.loaders.codebase.plugins.python_dependency_linker import PythonDependencyLinkerPlugin
+        nodes, edges = PythonDependencyLinkerPlugin().post_process(nodes, edges, ctx)
 
         logger.info(
             "After post-processing: %d nodes, %d edges from %s",
