@@ -88,6 +88,13 @@ class PostgresLoader(ConceptLoader, abc.ABC):
         fk_edges = self._discover_foreign_keys(driver, database_name)
         edges.extend(fk_edges)
 
+        # Role & grant discovery
+        role_nodes, grant_edges = self._discover_roles_and_grants(
+            driver, database_name,
+        )
+        nodes.extend(role_nodes)
+        edges.extend(grant_edges)
+
         logger.info(
             "Discovered %d nodes and %d edges from %s",
             len(nodes), len(edges), database_name,
@@ -224,6 +231,53 @@ class PostgresLoader(ConceptLoader, abc.ABC):
             ))
             edges.append(make_edge(
                 self.organization_id, table_urn, col_urn, RelationType.CONTAINS,
+            ))
+
+        return nodes, edges
+
+    def _discover_roles_and_grants(
+        self,
+        driver: BaseDiscoveryDriver,
+        database_name: str,
+    ) -> tuple[list[Node], list[Edge]]:
+        """Discover database roles and their table grants."""
+        nodes: list[Node] = []
+        edges: list[Edge] = []
+
+        # Discover roles
+        role_urn_map: dict[str, URN] = {}
+        for role in driver.discover_roles(database_name):
+            role_urn = self.build_urn(database_name, "roles", role.role_name)
+            role_urn_map[role.role_name] = role_urn
+            nodes.append(Node(
+                organization_id=self.organization_id,
+                urn=role_urn,
+                parent_urn=None,
+                metadata=NodeMetadata({
+                    NodeMetadataKey.ROLE_NAME: role.role_name,
+                    NodeMetadataKey.ROLE_LOGIN: role.can_login,
+                    NodeMetadataKey.ROLE_SUPERUSER: role.is_superuser,
+                }),
+            ))
+
+        # Discover grants and create PRINCIPAL_TO_DATA edges
+        for grant in driver.discover_grants():
+            role_urn = role_urn_map.get(grant.grantee)
+            if not role_urn:
+                continue
+
+            table_urn = self.build_urn(
+                database_name, grant.table_schema, grant.table_name,
+            )
+
+            edges.append(make_edge(
+                self.organization_id,
+                role_urn,
+                table_urn,
+                RelationType.PRINCIPAL_TO_DATA,
+                metadata=EdgeMetadata({
+                    EdgeMetadataKey.PRIVILEGE: grant.privilege_type,
+                }),
             ))
 
         return nodes, edges

@@ -4,6 +4,10 @@ Reads ``uv.lock`` (TOML format) from the codebase root, creates a node
 for each package with PACKAGE_NAME, PACKAGE_VERSION, and
 PACKAGE_ECOSYSTEM metadata, links them via CONTAINS edges to the
 codebase root, and queries OSV.dev for known vulnerabilities.
+
+Also creates DEPENDS_ON edges between dependency nodes based on the
+``dependencies`` field in each package entry, enabling transitive
+vulnerability traversal (e.g. file → python-jose → cryptography [CVE]).
 """
 
 from __future__ import annotations
@@ -96,5 +100,33 @@ class UvPlugin(CodebasePlugin):
                 RelationType.CONTAINS,
             ))
 
-        logger.info("UV plugin: found %d packages in uv.lock", len(new_nodes))
+        # Build transitive DEPENDS_ON edges between dependency nodes
+        # Map package name → URN for quick lookup
+        dep_urn_map = {
+            pkg.get("name", ""): context.build_urn(context.root_name, f"dep/{pkg.get('name', '')}")
+            for pkg in packages
+            if pkg.get("name") and pkg.get("version")
+        }
+
+        transitive_count = 0
+        for pkg in packages:
+            name = pkg.get("name", "")
+            if name not in dep_urn_map:
+                continue
+            from_urn = dep_urn_map[name]
+            for dep in pkg.get("dependencies", []):
+                dep_name = dep.get("name", "")
+                if dep_name in dep_urn_map:
+                    new_edges.append(make_edge(
+                        context.organization_id,
+                        from_urn,
+                        dep_urn_map[dep_name],
+                        RelationType.DEPENDS_ON,
+                    ))
+                    transitive_count += 1
+
+        logger.info(
+            "UV plugin: found %d packages, %d transitive dependency edges",
+            len(new_nodes), transitive_count,
+        )
         return nodes + new_nodes, edges + new_edges

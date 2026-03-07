@@ -52,6 +52,22 @@ class ForeignKeyMetadata(BaseModel):
     ordinal_position: int
 
 
+class RoleMetadata(BaseModel):
+    """Metadata for a discovered database role."""
+    role_name: str
+    can_login: bool
+    is_superuser: bool
+
+
+class GrantMetadata(BaseModel):
+    """Metadata for a discovered table grant."""
+    grantee: str
+    table_schema: str
+    table_name: str
+    privilege_type: str
+    is_grantable: bool
+
+
 class IndexMetadata(BaseModel):
     """Metadata for a discovered index."""
     schema_name: str
