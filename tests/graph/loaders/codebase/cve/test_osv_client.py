@@ -2,8 +2,8 @@
 
 import io
 import json
-from unittest.mock import patch, MagicMock
-from urllib.error import URLError, HTTPError
+from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError, URLError
 
 from src.graph.loaders.codebase.cve.osv_client import query_osv
 

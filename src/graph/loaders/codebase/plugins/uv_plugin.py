@@ -16,16 +16,16 @@ import logging
 import tomllib
 from typing import TYPE_CHECKING
 
+from src.graph.edges.contains_edge import ContainsEdge
+from src.graph.edges.depends_on_edge import DependsOnEdge
 from src.graph.graph_models import (
     Edge,
     Node,
-    NodeMetadata,
     NodeMetadataKey,
-    RelationType,
 )
-from src.graph.loaders._helpers import make_edge
 from src.graph.loaders.codebase.cve.osv_client import query_osv
 from src.graph.loaders.codebase.plugins._base import CodebasePlugin
+from src.graph.nodes.dependency_node import DependencyNode
 
 if TYPE_CHECKING:
     from src.graph.loaders.codebase.codebase_loader import PostProcessContext
@@ -75,32 +75,28 @@ class UvPlugin(CodebasePlugin):
 
             dep_urn = context.build_urn(context.root_name, f"dep/{name}")
 
-            meta = NodeMetadata({
-                NodeMetadataKey.PACKAGE_NAME: name,
-                NodeMetadataKey.PACKAGE_VERSION: version,
-                NodeMetadataKey.PACKAGE_ECOSYSTEM: "PyPI",
-            })
+            dep_node = DependencyNode.create(
+                organization_id=context.organization_id,
+                urn=dep_urn,
+                parent_urn=codebase_urn,
+                package_name=name,
+                package_version=version,
+                package_ecosystem="PyPI",
+            )
 
             # Query OSV for vulnerabilities
             try:
                 result = query_osv(name, version, "PyPI")
                 if result.cve_ids:
-                    meta[NodeMetadataKey.CVE_IDS] = ",".join(result.cve_ids)
+                    dep_node.metadata[NodeMetadataKey.CVE_IDS] = ",".join(result.cve_ids)
             except Exception:
                 logger.debug("OSV query failed for %s==%s", name, version)
 
-            dep_node = Node(
-                organization_id=context.organization_id,
-                urn=dep_urn,
-                parent_urn=codebase_urn,
-                metadata=meta,
-            )
             new_nodes.append(dep_node)
-            new_edges.append(make_edge(
+            new_edges.append(ContainsEdge.create(
                 context.organization_id,
                 codebase_urn,
                 dep_urn,
-                RelationType.CONTAINS,
             ))
 
         # Build transitive DEPENDS_ON edges between dependency nodes
@@ -120,11 +116,10 @@ class UvPlugin(CodebasePlugin):
             for dep in pkg.get("dependencies", []):
                 dep_name = dep.get("name", "")
                 if dep_name in dep_urn_map:
-                    new_edges.append(make_edge(
+                    new_edges.append(DependsOnEdge.create(
                         context.organization_id,
                         from_urn,
                         dep_urn_map[dep_name],
-                        RelationType.DEPENDS_ON,
                     ))
                     transitive_count += 1
 

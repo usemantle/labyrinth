@@ -5,15 +5,15 @@ All driver calls are mocked — no database required.
 """
 
 import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.drivers.sql.models import (
-    SchemaMetadata,
-    TableMetadata,
     ColumnMetadata,
     ForeignKeyMetadata,
+    SchemaMetadata,
+    TableMetadata,
 )
 from src.graph.graph_models import RelationType
 from src.graph.loaders.postgres.onprem_postgres_loader import OnPremPostgresLoader
@@ -130,7 +130,7 @@ def test_column_nodes(loader_result):
     columns = [n for n in nodes if "column_name" in n.metadata]
     assert len(columns) == 5
     names = {n.metadata["column_name"] for n in columns}
-    assert names == {"id", "email", "user_id", "total", "id"}
+    assert names == {"id", "email", "user_id", "total"}
 
 
 # ── Column metadata formatting ──────────────────────────────────────

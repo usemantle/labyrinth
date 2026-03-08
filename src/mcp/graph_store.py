@@ -54,16 +54,16 @@ class GraphStore:
 
         for edge in data["edges"]:
             key = edge["uuid"]
+            edge_type = edge.get("edge_type") or edge.get("relation_type", "UNKNOWN")
             self.G.add_edge(
                 edge["from_urn"],
                 edge["to_urn"],
                 key=key,
-                relation_type=edge.get("relation_type", "UNKNOWN"),
+                edge_type=edge_type,
                 metadata=edge.get("metadata", {}),
                 organization_id=edge.get("organization_id"),
             )
-            rel_type = edge.get("relation_type", "UNKNOWN")
-            self.edges_by_type.setdefault(rel_type, []).append(
+            self.edges_by_type.setdefault(edge_type, []).append(
                 (edge["from_urn"], edge["to_urn"], key)
             )
 
@@ -92,15 +92,15 @@ class GraphStore:
                 logger.warning("Soft link skipped — to_urn not in graph: %s", to_urn)
                 continue
 
-            relation_type = link.get("relation_type", "CODE_TO_DATA")
+            edge_type = link.get("edge_type") or link.get("relation_type", "reads")
             edge_key = str(uuid.uuid5(
-                EDGE_NAMESPACE, f"{from_urn}:{to_urn}:{relation_type}"
+                EDGE_NAMESPACE, f"{from_urn}:{to_urn}:{edge_type}"
             ))
             org_id = self.G.nodes[from_urn].get("organization_id")
 
             self.G.add_edge(
                 from_urn, to_urn, key=edge_key,
-                relation_type=relation_type,
+                edge_type=edge_type,
                 metadata={
                     "detection_method": link.get("detection_method", "soft_link"),
                     "confidence": link.get("confidence", 0.7),
@@ -108,7 +108,7 @@ class GraphStore:
                 },
                 organization_id=org_id,
             )
-            self.edges_by_type.setdefault(relation_type, []).append(
+            self.edges_by_type.setdefault(edge_type, []).append(
                 (from_urn, to_urn, edge_key)
             )
             self.soft_links.append(link)

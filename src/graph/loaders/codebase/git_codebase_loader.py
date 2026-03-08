@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from src.graph.credentials import CredentialBase, NoCredential
-from src.graph.graph_models import Edge, Node, NodeMetadataKey, URN
+from src.graph.graph_models import URN, Edge, Node, NodeMetadataKey
 from src.graph.loaders.codebase.codebase_loader import EXTENSION_TO_LANGUAGE, CodebaseLoader
 from src.graph.loaders.loader import URNComponent
 

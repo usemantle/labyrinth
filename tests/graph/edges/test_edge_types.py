@@ -4,7 +4,6 @@ import uuid
 
 import pytest
 
-from src.graph.graph_models import Edge, EdgeMetadata, EdgeMetadataKey, RelationType, URN
 from src.graph.edges import (
     CallsEdge,
     ContainsEdge,
@@ -16,6 +15,7 @@ from src.graph.edges import (
     SoftReferenceEdge,
     WritesEdge,
 )
+from src.graph.graph_models import URN, Edge, EdgeMetadata, EdgeMetadataKey, RelationType
 
 ORG_ID = uuid.uuid4()
 FROM_URN = URN("urn:test:test:::from")

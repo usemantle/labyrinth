@@ -16,7 +16,6 @@ from src.graph.loaders.object_store.s3.matchers import (
 from src.graph.loaders.object_store.s3.trie import PathTrie
 from src.graph.loaders.object_store.s3.wildcard import build_collapsed_trie
 
-
 # ── Segment matcher tests ─────────────────────────────────────────
 
 

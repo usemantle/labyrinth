@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from src.graph.graph_models import Edge, Node, NodeMetadataKey
@@ -48,22 +48,24 @@ def classify_node(node: Node) -> str:
 
 
 def _serialize_node(node: Node) -> dict:
+    node_type = node.node_type if node.node_type != "unknown" else classify_node(node)
     return {
         "urn": str(node.urn),
         "organization_id": str(node.organization_id),
         "parent_urn": str(node.parent_urn) if node.parent_urn else None,
-        "node_type": classify_node(node),
+        "node_type": node_type,
         "metadata": dict(node.metadata.items()),
     }
 
 
 def _serialize_edge(edge: Edge) -> dict:
+    edge_type = edge.edge_type if edge.edge_type else edge.relation_type.value
     return {
         "uuid": str(edge.uuid),
         "organization_id": str(edge.organization_id),
         "from_urn": str(edge.from_urn),
         "to_urn": str(edge.to_urn),
-        "relation_type": edge.relation_type.value,
+        "edge_type": edge_type,
         "metadata": dict(edge.metadata.items()),
     }
 
@@ -76,7 +78,7 @@ class JsonFileSink(Sink):
 
     def write(self, nodes: list[Node], edges: list[Edge]) -> None:
         data = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "node_count": len(nodes),
             "edge_count": len(edges),
             "nodes": [_serialize_node(n) for n in nodes],

@@ -17,15 +17,14 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from src.graph.edges.calls_edge import CallsEdge
 from src.graph.graph_models import (
     Edge,
     EdgeMetadata,
     EdgeMetadataKey,
     Node,
     NodeMetadataKey,
-    RelationType,
 )
-from src.graph.loaders._helpers import make_edge
 from src.graph.loaders.codebase.plugins._base import CodebasePlugin
 
 if TYPE_CHECKING:
@@ -160,12 +159,11 @@ class SQLAlchemyPlugin(CodebasePlugin):
             for class_name in referenced:
                 orm_node = orm_classes[class_name]
                 EK = EdgeMetadataKey
-                edge = make_edge(
+                edge = CallsEdge.create(
                     context.organization_id,
                     node.urn,
                     orm_node.urn,
-                    RelationType.CODE_TO_CODE,
-                    EdgeMetadata({
+                    metadata=EdgeMetadata({
                         EK.DETECTION_METHOD: "orm_model_reference",
                         EK.CONFIDENCE: 0.9,
                         EK.ORM_FRAMEWORK: "sqlalchemy",

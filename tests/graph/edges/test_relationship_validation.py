@@ -2,8 +2,6 @@
 
 import uuid
 
-import pytest
-
 from src.graph.edges import (
     CallsEdge,
     ContainsEdge,
@@ -16,7 +14,7 @@ from src.graph.edges import (
     WritesEdge,
     validate_edge,
 )
-from src.graph.graph_models import Node, URN
+from src.graph.graph_models import URN, Node
 from src.graph.nodes import (
     BucketNode,
     ClassNode,

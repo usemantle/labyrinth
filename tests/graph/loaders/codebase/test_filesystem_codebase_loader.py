@@ -11,11 +11,8 @@ import pytest
 
 from src.graph.graph_models import (
     EdgeMetadataKey,
-    Node,
-    NodeMetadata,
     NodeMetadataKey,
     RelationType,
-    URN,
 )
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 

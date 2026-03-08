@@ -11,17 +11,17 @@ import logging
 import uuid
 from pathlib import Path
 
+from src.graph.edges.models_edge import ModelsEdge
+from src.graph.edges.reads_edge import ReadsEdge
 from src.graph.graph_models import (
+    URN,
     Edge,
     EdgeMetadata,
     EdgeMetadataKey,
     Node,
     NodeMetadata,
     NodeMetadataKey,
-    RelationType,
-    URN,
 )
-from src.graph.loaders._helpers import make_edge
 
 logger = logging.getLogger(__name__)
 
@@ -101,11 +101,10 @@ def _create_orm_class_edges(
     for class_name, (class_urn, table_name) in orm_registry.items():
         if table_name in table_registry:
             table_urn = table_registry[table_name]
-            all_edges.append(make_edge(
+            all_edges.append(ModelsEdge.create(
                 organization_id,
                 class_urn,
                 table_urn,
-                RelationType.CODE_TO_DATA,
                 metadata=EdgeMetadata({
                     EdgeMetadataKey.DETECTION_METHOD: "orm_tablename",
                     EdgeMetadataKey.CONFIDENCE: 1.0,
@@ -138,11 +137,10 @@ def _create_function_edges(
         for class_name, (_, table_name) in orm_registry.items():
             if class_name in source_text and table_name in table_registry:
                 table_urn = table_registry[table_name]
-                all_edges.append(make_edge(
+                all_edges.append(ReadsEdge.create(
                     organization_id,
                     node.urn,
                     table_urn,
-                    RelationType.CODE_TO_DATA,
                     metadata=EdgeMetadata({
                         EdgeMetadataKey.DETECTION_METHOD: "orm_reference",
                         EdgeMetadataKey.CONFIDENCE: 0.9,

@@ -277,7 +277,7 @@ def test_transitive_cve_reachable_via_blast_radius(mock_osv, tmp_path):
                 "organization_id": str(e.organization_id),
                 "from_urn": str(e.from_urn),
                 "to_urn": str(e.to_urn),
-                "relation_type": e.relation_type.value,
+                "edge_type": e.edge_type or e.relation_type.value,
                 "metadata": dict(e.metadata.items()),
             }
             for e in edges

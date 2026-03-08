@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from src.graph.graph_models import Node, NodeMetadataKey, URN
+from src.graph.graph_models import URN, Node, NodeMetadataKey
 from src.graph.nodes import (
     BucketNode,
     ClassNode,

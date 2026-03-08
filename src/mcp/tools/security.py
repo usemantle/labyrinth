@@ -42,7 +42,7 @@ def _bfs(
         edges = store.G.in_edges(current, data=True) if reverse else store.G.out_edges(current, data=True)
         for edge in edges:
             neighbor = edge[0] if reverse else edge[1]
-            if edge[2].get("relation_type") in follow_types and neighbor not in visited:
+            if edge[2].get("edge_type") in follow_types and neighbor not in visited:
                 queue.append((neighbor, depth + 1))
 
     return visited
@@ -84,7 +84,7 @@ def _incoming_depends_on(store: GraphStore, dep_urn: str) -> list[tuple[str, dic
     return [
         (from_urn, data)
         for from_urn, _, data in store.G.in_edges(dep_urn, data=True)
-        if data.get("relation_type") == "DEPENDS_ON"
+        if data.get("edge_type") == "depends_on"
     ]
 
 
@@ -147,7 +147,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         # Find sensitive columns
         sensitive_cols = []
         for _, to_urn, data in store.G.out_edges(table_urn, data=True):
-            if data.get("relation_type") != "CONTAINS":
+            if data.get("edge_type") != "contains":
                 continue
             col_node = store.node_dict(to_urn)
             if col_node and col_node["metadata"].get("data_sensitivity"):
@@ -157,7 +157,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         code_urns = [
             from_urn
             for from_urn, _, data in store.G.in_edges(table_urn, data=True)
-            if data.get("relation_type") == "CODE_TO_DATA"
+            if data.get("edge_type") in {"reads", "writes", "models"}
         ]
 
         lines = [f"Sensitive data access for table '{table_name}':"]
@@ -252,13 +252,18 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
 
     @mcp.tool()
     def find_database_permissions(table_name: str = "", role_name: str = "") -> str:
-        """Show database role permissions (PRINCIPAL_TO_DATA edges).
+        """Show database role permissions (reads/writes edges from principals).
 
         Args:
             table_name: Optional filter by table name.
             role_name: Optional filter by role name.
         """
-        p2d_edges = store.edges_by_type.get("PRINCIPAL_TO_DATA", [])
+        p2d_edges = []
+        for _et in ("reads", "writes"):
+            for from_urn, to_urn, key in store.edges_by_type.get(_et, []):
+                from_node = store.node_dict(from_urn)
+                if from_node and from_node["node_type"] == "db_role":
+                    p2d_edges.append((from_urn, to_urn, key))
         if not p2d_edges:
             return "No database permission data found. Ensure PostgreSQL role/grant discovery is enabled."
 
@@ -320,7 +325,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         if urn not in store.G:
             return f"No node found with URN: {urn}"
 
-        follow_types = {"CODE_TO_CODE", "CODE_TO_DATA", "DATA_TO_DATA", "DEPENDS_ON", "CONTAINS"}
+        follow_types = {"calls", "reads", "writes", "models", "references", "soft_reference", "depends_on", "contains"}
         visited = _bfs(store, urn, max_depth, follow_types)
 
         code_nodes = []
@@ -396,7 +401,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         if urn not in store.G:
             return f"No node found with URN: {urn}"
 
-        follow_types = {"CODE_TO_DATA", "CODE_TO_CODE", "PRINCIPAL_TO_DATA", "CONTAINS"}
+        follow_types = {"reads", "writes", "models", "calls", "contains"}
         visited = _bfs(store, urn, max_depth, follow_types, reverse=True)
 
         code_paths = []

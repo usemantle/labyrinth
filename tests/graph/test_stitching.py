@@ -8,12 +8,12 @@ via CODE_TO_DATA edges.
 import uuid
 
 from src.graph.graph_models import (
+    URN,
     EdgeMetadataKey,
     Node,
     NodeMetadata,
     NodeMetadataKey,
     RelationType,
-    URN,
 )
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 from src.graph.loaders.codebase.plugins import SQLAlchemyPlugin

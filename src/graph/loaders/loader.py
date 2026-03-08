@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass
 
 from src.graph.credentials import CredentialBase
-from src.graph.graph_models import Edge, Node, URN
+from src.graph.graph_models import URN, Edge, Node
 
 
 @dataclass

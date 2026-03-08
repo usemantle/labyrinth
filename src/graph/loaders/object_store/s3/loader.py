@@ -13,22 +13,21 @@ import logging
 import uuid
 
 from src.graph.credentials import AWSProfileCredential, CredentialBase
+from src.graph.edges.contains_edge import ContainsEdge
 from src.graph.graph_models import (
+    URN,
     Edge,
     Node,
-    NodeMetadata,
     NodeMetadataKey,
-    RelationType,
-    URN,
 )
-from src.graph.loaders._helpers import make_edge
 from src.graph.loaders.loader import ConceptLoader, URNComponent
 from src.graph.loaders.object_store.s3.matchers import (
     SegmentMatcher,
     SequenceMatcher,
 )
-from src.graph.loaders.object_store.s3.trie import TrieNode
 from src.graph.loaders.object_store.s3.wildcard import build_collapsed_trie
+from src.graph.nodes.bucket_node import BucketNode
+from src.graph.nodes.object_path_node import ObjectPathNode
 
 logger = logging.getLogger(__name__)
 
@@ -147,17 +146,14 @@ class S3BucketLoader(ConceptLoader):
 
     def _build_bucket_node(
         self, bucket_urn: URN, bucket_name: str, arn: str,
-    ) -> Node:
-        return Node(
+    ) -> BucketNode:
+        return BucketNode.create(
             organization_id=self.organization_id,
             urn=bucket_urn,
-            parent_urn=None,
-            metadata=NodeMetadata({
-                NodeMetadataKey.BUCKET_NAME: bucket_name,
-                NodeMetadataKey.ARN: arn,
-                NodeMetadataKey.ACCOUNT_ID: self._account_id,
-                NodeMetadataKey.REGION: self._region,
-            }),
+            bucket_name=bucket_name,
+            arn=arn,
+            account_id=self._account_id,
+            region=self._region,
         )
 
     def _list_object_keys(self, bucket_name: str) -> list[str]:
@@ -200,37 +196,24 @@ class S3BucketLoader(ConceptLoader):
             else:
                 parent_urn = bucket_urn
 
-            nodes.append(Node(
+            obj_node = ObjectPathNode.create(
                 organization_id=self.organization_id,
                 urn=node_urn,
                 parent_urn=parent_urn,
-                metadata=self._build_node_metadata(path_str, trie_node),
-            ))
-            edges.append(make_edge(
+                path_pattern=path_str,
+                object_count=trie_node.key_count if trie_node.is_leaf else None,
+                sample_keys=",".join(trie_node.sample_keys[:_MAX_SAMPLES]) if trie_node.sample_keys else None,
+            )
+            if trie_node.collapsed_token:
+                obj_node.metadata[NodeMetadataKey.PARTITION_TYPE] = trie_node.collapsed_token
+            nodes.append(obj_node)
+            edges.append(ContainsEdge.create(
                 self.organization_id,
                 parent_urn,
                 node_urn,
-                RelationType.CONTAINS,
             ))
 
         return nodes, edges
-
-    @staticmethod
-    def _build_node_metadata(
-        path_str: str, trie_node: TrieNode,
-    ) -> NodeMetadata:
-        meta = NodeMetadata({
-            NodeMetadataKey.PATH_PATTERN: path_str,
-        })
-        if trie_node.is_leaf:
-            meta[NodeMetadataKey.OBJECT_COUNT] = trie_node.key_count
-        if trie_node.sample_keys:
-            meta[NodeMetadataKey.SAMPLE_KEYS] = ",".join(
-                trie_node.sample_keys[:_MAX_SAMPLES],
-            )
-        if trie_node.collapsed_token:
-            meta[NodeMetadataKey.PARTITION_TYPE] = trie_node.collapsed_token
-        return meta
 
     @staticmethod
     def _parse_bucket_name(arn: str) -> str:
