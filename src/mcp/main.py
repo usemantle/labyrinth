@@ -5,7 +5,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from src.mcp.graph_store import GraphStore
-from src.mcp.tools import code_data, query, soft_links, traversal
+from src.mcp.tools import code_data, query, security, soft_links, traversal
 
 
 def run_mcp_server(graph_path: Path) -> None:
@@ -18,5 +18,6 @@ def run_mcp_server(graph_path: Path) -> None:
     code_data.register(mcp, store)
     traversal.register(mcp, store)
     soft_links.register(mcp, store)
+    security.register(mcp, store)
 
     mcp.run(transport="stdio")

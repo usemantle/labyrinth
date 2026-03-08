@@ -27,13 +27,16 @@ class _TrackingPlugin(CodebasePlugin):
         self.class_calls = []
         self.function_calls = []
 
+    def supported_languages(self):
+        return {'python'}
+
     def on_class_node(self, node, class_body_source, language):
         self.class_calls.append((node.metadata.get(NK.CLASS_NAME), language))
         node.metadata[NK.ORM_TABLE] = "__tracked__"
         return node
 
-    def on_function_node(self, node, function_source, language):
-        self.function_calls.append((node.metadata.get(NK.FUNCTION_NAME), language))
+    def on_function_node(self, node, function_source):
+        self.function_calls.append((node.metadata.get(NK.FUNCTION_NAME),))
         node.metadata[NK.ORM_TABLE] = "__tracked__"
         return node
 
@@ -70,7 +73,7 @@ def test_plugin_receives_function_nodes(tmp_path):
     nodes, _ = loader.load(str(repo))
 
     assert len(plugin.function_calls) == 1
-    assert plugin.function_calls[0] == ("hello", "python")
+    assert plugin.function_calls[0][0] == "hello"
 
 
 def test_plugin_skips_non_python_for_language_check(tmp_path):

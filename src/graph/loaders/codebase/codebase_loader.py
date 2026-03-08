@@ -13,26 +13,24 @@ from __future__ import annotations
 import abc
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
 
 from ast_grep_py import SgRoot
 
 from src.graph.graph_models import (
+    URN,
     Edge,
     Node,
     NodeMetadata,
     NodeMetadataKey,
     RelationType,
-    URN,
 )
 from src.graph.loaders._helpers import make_edge
 from src.graph.loaders.codebase.plugins._base import CodebasePlugin
+from src.graph.loaders.codebase.resolvers import LANGUAGE_ANALYZERS
 from src.graph.loaders.loader import ConceptLoader
-
-if TYPE_CHECKING:
-    from src.graph.loaders.codebase.resolvers._base import LanguageAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +174,9 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
             SQLAlchemyPlugin,
             UvPlugin,
         )
+        from src.graph.loaders.codebase.plugins.python_dependency_linker import (
+            PythonDependencyLinkerPlugin,
+        )
         return {
             "sqlalchemy": SQLAlchemyPlugin,
             "fastapi": FastAPIPlugin,
@@ -183,6 +184,7 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
             "requests": RequestsPlugin,
             "boto3-s3": Boto3S3Plugin,
             "uv": UvPlugin,
+            "python-imports": PythonDependencyLinkerPlugin,
         }
 
     # ------------------------------------------------------------------
@@ -257,12 +259,9 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
             build_urn=self.build_urn,
         )
 
-        # 2a. Language analysis (import resolution, call graph)
+        # 2a. Language analysis (import resolution, call graph) and
+        #     plugin post-processing, grouped by detected language.
         nodes, edges = self._run_language_analysis(nodes, edges, ctx)
-
-        # 2b. Plugin post-processing (domain-specific enrichment)
-        for plugin in self._plugins:
-            nodes, edges = plugin.post_process(nodes, edges, ctx)
 
         logger.info(
             "After post-processing: %d nodes, %d edges from %s",
@@ -314,25 +313,41 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
         edges: list[Edge],
         ctx: PostProcessContext,
     ) -> tuple[list[Node], list[Edge]]:
-        """Run language-specific analyzers (import resolution, call graph).
+        """Run language analyzers and plugin post-processing.
 
-        Groups files by language, looks up the LanguageAnalyzer for each,
-        and delegates cross-file analysis.
+        Groups files by detected language, runs the LanguageAnalyzer for
+        each, then runs plugin ``post_process`` hooks — language-specific
+        plugins for each detected language first, then language-agnostic
+        plugins (those returning ``None`` from ``supported_languages``).
         """
-        from src.graph.loaders.codebase.resolvers import LANGUAGE_ANALYZERS
 
         # Group files by language
+        detected_languages: set[str] = set()
         files_by_lang: dict[str, dict[str, str]] = {}
         for rel_path, lang in ctx.file_languages.items():
+            detected_languages.add(lang)
             files_by_lang.setdefault(lang, {})[rel_path] = ctx.file_sources[rel_path]
 
+        # Run language analyzers (import resolution, call graph)
         for lang, sources in files_by_lang.items():
             analyzer = LANGUAGE_ANALYZERS.get(lang)
             if not analyzer:
                 continue
-            new_nodes, new_edges = analyzer.analyze(nodes, edges, sources, ctx)
-            nodes = new_nodes
-            edges = new_edges
+            nodes, edges = analyzer.analyze(nodes, edges, sources, ctx)
+
+        # Partition plugins by language affinity
+        lang_plugins: list[CodebasePlugin] = []
+        universal_plugins: list[CodebasePlugin] = []
+        for plugin in self._plugins:
+            langs = plugin.supported_languages()
+            if langs is None:
+                universal_plugins.append(plugin)
+            elif langs & detected_languages:
+                lang_plugins.append(plugin)
+
+        # Run language-specific plugins, then universal plugins
+        for plugin in lang_plugins + universal_plugins:
+            nodes, edges = plugin.post_process(nodes, edges, ctx)
 
         return nodes, edges
 
@@ -511,7 +526,8 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
                 # Run plugins on function node (child.text() includes decorators)
                 func_source = child.text()
                 for plugin in self._plugins:
-                    func_node = plugin.on_function_node(func_node, func_source, language)
+                    if language in plugin.supported_languages():
+                        func_node = plugin.on_function_node(func_node, func_source)
 
                 nodes.append(func_node)
                 edges.append(make_edge(

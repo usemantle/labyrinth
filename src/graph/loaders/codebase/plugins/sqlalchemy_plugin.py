@@ -63,6 +63,9 @@ def _classify_operation(op: str) -> str:
 class SQLAlchemyPlugin(CodebasePlugin):
     """Detects SQLAlchemy ``__tablename__`` and enriches class metadata."""
 
+    def supported_languages(self) -> set[str]:
+        return {"python"}
+
     def on_class_node(
         self,
         node: Node,
@@ -83,10 +86,7 @@ class SQLAlchemyPlugin(CodebasePlugin):
         self,
         node: Node,
         function_source: str,
-        language: str,
     ) -> Node:
-        if language != "python":
-            return node
 
         ops: set[str] = set()
         for match in _ORM_OP_RE.finditer(function_source):

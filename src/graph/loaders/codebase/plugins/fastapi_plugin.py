@@ -17,8 +17,8 @@ auth_scheme / auth_scheme_var to endpoint functions via Depends().
 
 from __future__ import annotations
 
-import re
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from ast_grep_py import SgRoot
@@ -80,14 +80,14 @@ _ROUTER_DEPS_RE = re.compile(
 class FastAPIPlugin(CodebasePlugin):
     """Detects FastAPI route decorators and resolves full route paths."""
 
+    def supported_languages(self) -> set[str]:
+        return {"python"}
+
     def on_function_node(
         self,
         node: Node,
         function_source: str,
-        language: str,
     ) -> Node:
-        if language != "python":
-            return node
 
         match = _ROUTE_RE.search(function_source)
         if match:
@@ -197,7 +197,7 @@ def _find_include_router_prefixes(
     """
     result: dict[str, str] = {}
 
-    for rel_path, source in file_sources.items():
+    for _rel_path, source in file_sources.items():
         # First build import map for this file to resolve aliases
         imports = _parse_simple_imports(source, package_name, file_sources)
 

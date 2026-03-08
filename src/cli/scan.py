@@ -6,6 +6,7 @@ import logging
 import uuid
 from pathlib import Path
 
+from src.graph.enrichment.sensitivity_classifier import enrich_sensitivity
 from src.graph.graph_models import Edge, Node, URN
 from src.graph.loaders import LOADER_REGISTRY
 from src.graph.loaders.loader import ConceptLoader
@@ -107,6 +108,9 @@ def run_scan(
     else:
         all_nodes = all_data_nodes + all_code_nodes
         all_edges = list(all_data_edges) + list(all_code_edges)
+
+    # Enrich sensitivity metadata
+    all_nodes = enrich_sensitivity(all_nodes)
 
     # Summarize
     by_type: dict[str, int] = {}

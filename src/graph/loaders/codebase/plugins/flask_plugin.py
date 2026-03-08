@@ -22,14 +22,14 @@ _FLASK_ROUTE_RE = re.compile(
 class FlaskPlugin(CodebasePlugin):
     """Detects Flask route decorators (ingress/network)."""
 
+    def supported_languages(self) -> set[str]:
+        return {"python"}
+
     def on_function_node(
         self,
         node: Node,
-        function_source: str,
-        language: str,
+        function_source: str
     ) -> Node:
-        if language != "python":
-            return node
 
         match = _FLASK_ROUTE_RE.search(function_source)
         if match:

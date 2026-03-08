@@ -40,6 +40,10 @@ def classify_node(node: Node) -> str:
         return "s3_object"
     if NK.BUCKET_NAME in m:
         return "s3_bucket"
+    if NK.PACKAGE_NAME in m:
+        return "dependency"
+    if NK.ROLE_NAME in m:
+        return "db_role"
     return "unknown"
 
 
