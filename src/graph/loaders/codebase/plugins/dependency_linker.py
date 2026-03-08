@@ -12,6 +12,7 @@ import abc
 import logging
 from typing import TYPE_CHECKING
 
+from src.graph.edges.depends_on_edge import DependsOnEdge
 from src.graph.graph_models import (
     URN,
     Edge,
@@ -19,9 +20,7 @@ from src.graph.graph_models import (
     EdgeMetadataKey,
     Node,
     NodeMetadataKey,
-    RelationType,
 )
-from src.graph.loaders._helpers import make_edge
 from src.graph.loaders.codebase.plugins._base import CodebasePlugin
 
 if TYPE_CHECKING:
@@ -116,11 +115,10 @@ class DependencyLinkerPlugin(CodebasePlugin, abc.ABC):
             for import_name in import_names:
                 dep_node = dep_map.get(import_name)
                 if dep_node:
-                    edge = make_edge(
+                    edge = DependsOnEdge.create(
                         context.organization_id,
                         URN(file_urn_str),
                         dep_node.urn,
-                        RelationType.DEPENDS_ON,
                         metadata=EdgeMetadata({
                             EK.IMPORT_NAME: import_name,
                         }),

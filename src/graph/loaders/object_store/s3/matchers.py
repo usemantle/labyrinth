@@ -15,7 +15,6 @@ from __future__ import annotations
 import abc
 import re
 
-
 # ── Regex patterns (shared with wildcard.py) ──────────────────────
 
 _UUID_RE = re.compile(

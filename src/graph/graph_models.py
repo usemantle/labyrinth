@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, ClassVar
 
 
 class RelationType(str, enum.Enum):
@@ -275,7 +275,7 @@ class URN:
     def path(self) -> str:
         return self._parts()[4]
 
-    def parent(self) -> Optional[URN]:
+    def parent(self) -> URN | None:
         """Return the parent URN by trimming the last path segment."""
         path = self.path
         if "/" not in path:
@@ -323,6 +323,13 @@ class Node:
     urn: URN
     parent_urn: URN | None = None
     metadata: NodeMetadata = field(default_factory=NodeMetadata)
+    node_type: str = "unknown"
+
+    _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset()
+    _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset()
+
+
+EDGE_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "dsec:graph:edge")
 
 
 @dataclass
@@ -348,3 +355,4 @@ class Edge:
     to_urn: URN
     relation_type: RelationType
     metadata: EdgeMetadata = field(default_factory=EdgeMetadata)
+    edge_type: str | None = None

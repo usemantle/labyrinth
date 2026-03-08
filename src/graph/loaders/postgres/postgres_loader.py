@@ -15,20 +15,28 @@ from sqlalchemy.engine.url import make_url
 
 from src.drivers.sql.base import BaseDiscoveryDriver
 from src.drivers.sql.models import ColumnMetadata
+from src.graph.edges.contains_edge import ContainsEdge
+from src.graph.edges.reads_edge import ReadsEdge
+from src.graph.edges.references_edge import ReferencesEdge
+from src.graph.edges.writes_edge import WritesEdge
 from src.graph.graph_models import (
+    URN,
     Edge,
     EdgeMetadata,
     EdgeMetadataKey,
     Node,
-    NodeMetadata,
-    NodeMetadataKey,
-    RelationType,
-    URN,
 )
-from src.graph.loaders._helpers import make_edge
 from src.graph.loaders.loader import ConceptLoader
+from src.graph.nodes.column_node import ColumnNode
+from src.graph.nodes.database_node import DatabaseNode
+from src.graph.nodes.identity_node import IdentityNode
+from src.graph.nodes.schema_node import SchemaNode
+from src.graph.nodes.table_node import TableNode
 
 logger = logging.getLogger(__name__)
+
+# Privileges that map to WritesEdge; everything else defaults to ReadsEdge.
+_WRITE_PRIVILEGES = frozenset({"INSERT", "UPDATE", "DELETE"})
 
 
 def _format_data_type(col: ColumnMetadata) -> str:
@@ -84,7 +92,7 @@ class PostgresLoader(ConceptLoader, abc.ABC):
         nodes.extend(schema_nodes)
         edges.extend(schema_edges)
 
-        # Foreign-key edges (column → column, DATA_TO_DATA)
+        # Foreign-key edges (column → column, ReferencesEdge)
         fk_edges = self._discover_foreign_keys(driver, database_name)
         edges.extend(fk_edges)
 
@@ -108,21 +116,19 @@ class PostgresLoader(ConceptLoader, abc.ABC):
         database_name: str,
         host: str,
         port: int,
-    ) -> Node:
+    ) -> DatabaseNode:
         """Build the database root node.
 
         Override in subclasses to add provider-specific metadata
         (e.g. ARN, account_id, region for AWS).
         """
-        return Node(
-            organization_id=self.organization_id,
-            urn=db_urn,
+        return DatabaseNode.create(
+            self.organization_id,
+            db_urn,
             parent_urn=None,
-            metadata=NodeMetadata({
-                NodeMetadataKey.DATABASE_NAME: database_name,
-                NodeMetadataKey.HOST: host,
-                NodeMetadataKey.PORT: port,
-            }),
+            database_name=database_name,
+            host=host,
+            port=port,
         )
 
     # ------------------------------------------------------------------
@@ -147,14 +153,14 @@ class PostgresLoader(ConceptLoader, abc.ABC):
             schema_name = schema.schema_name
             schema_urn = self.build_urn(database_name, schema_name)
 
-            nodes.append(Node(
-                organization_id=self.organization_id,
-                urn=schema_urn,
+            nodes.append(SchemaNode.create(
+                self.organization_id,
+                schema_urn,
                 parent_urn=db_urn,
-                metadata=NodeMetadata({NodeMetadataKey.SCHEMA_NAME: schema_name}),
+                schema_name=schema_name,
             ))
-            edges.append(make_edge(
-                self.organization_id, db_urn, schema_urn, RelationType.CONTAINS,
+            edges.append(ContainsEdge.create(
+                self.organization_id, db_urn, schema_urn,
             ))
 
             table_nodes, table_edges = self._discover_tables_in_schema(
@@ -180,17 +186,15 @@ class PostgresLoader(ConceptLoader, abc.ABC):
             table_name = table.table_name
             table_urn = self.build_urn(database_name, schema_name, table_name)
 
-            nodes.append(Node(
-                organization_id=self.organization_id,
-                urn=table_urn,
+            nodes.append(TableNode.create(
+                self.organization_id,
+                table_urn,
                 parent_urn=schema_urn,
-                metadata=NodeMetadata({
-                    NodeMetadataKey.TABLE_NAME: table_name,
-                    NodeMetadataKey.TABLE_TYPE: table.table_type,
-                }),
+                table_name=table_name,
+                table_type=table.table_type,
             ))
-            edges.append(make_edge(
-                self.organization_id, schema_urn, table_urn, RelationType.CONTAINS,
+            edges.append(ContainsEdge.create(
+                self.organization_id, schema_urn, table_urn,
             ))
 
             col_nodes, col_edges = self._discover_columns_in_table(
@@ -218,19 +222,17 @@ class PostgresLoader(ConceptLoader, abc.ABC):
                 database_name, schema_name, table_name, col.column_name,
             )
 
-            nodes.append(Node(
-                organization_id=self.organization_id,
-                urn=col_urn,
+            nodes.append(ColumnNode.create(
+                self.organization_id,
+                col_urn,
                 parent_urn=table_urn,
-                metadata=NodeMetadata({
-                    NodeMetadataKey.COLUMN_NAME: col.column_name,
-                    NodeMetadataKey.DATA_TYPE: _format_data_type(col),
-                    NodeMetadataKey.NULLABLE: col.is_nullable,
-                    NodeMetadataKey.ORDINAL_POSITION: ordinal,
-                }),
+                column_name=col.column_name,
+                data_type=_format_data_type(col),
+                nullable=col.is_nullable,
+                ordinal_position=ordinal,
             ))
-            edges.append(make_edge(
-                self.organization_id, table_urn, col_urn, RelationType.CONTAINS,
+            edges.append(ContainsEdge.create(
+                self.organization_id, table_urn, col_urn,
             ))
 
         return nodes, edges
@@ -249,18 +251,16 @@ class PostgresLoader(ConceptLoader, abc.ABC):
         for role in driver.discover_roles(database_name):
             role_urn = self.build_urn(database_name, "roles", role.role_name)
             role_urn_map[role.role_name] = role_urn
-            nodes.append(Node(
-                organization_id=self.organization_id,
-                urn=role_urn,
+            nodes.append(IdentityNode.create(
+                self.organization_id,
+                role_urn,
                 parent_urn=None,
-                metadata=NodeMetadata({
-                    NodeMetadataKey.ROLE_NAME: role.role_name,
-                    NodeMetadataKey.ROLE_LOGIN: role.can_login,
-                    NodeMetadataKey.ROLE_SUPERUSER: role.is_superuser,
-                }),
+                role_name=role.role_name,
+                role_login=role.can_login,
+                role_superuser=role.is_superuser,
             ))
 
-        # Discover grants and create PRINCIPAL_TO_DATA edges
+        # Discover grants and create ReadsEdge / WritesEdge edges
         for grant in driver.discover_grants():
             role_urn = role_urn_map.get(grant.grantee)
             if not role_urn:
@@ -270,15 +270,38 @@ class PostgresLoader(ConceptLoader, abc.ABC):
                 database_name, grant.table_schema, grant.table_name,
             )
 
-            edges.append(make_edge(
-                self.organization_id,
-                role_urn,
-                table_urn,
-                RelationType.PRINCIPAL_TO_DATA,
-                metadata=EdgeMetadata({
-                    EdgeMetadataKey.PRIVILEGE: grant.privilege_type,
-                }),
-            ))
+            privilege = grant.privilege_type
+            grant_metadata = EdgeMetadata({
+                EdgeMetadataKey.PRIVILEGE: privilege,
+            })
+
+            if privilege == "ALL":
+                edges.append(ReadsEdge.create(
+                    self.organization_id,
+                    role_urn,
+                    table_urn,
+                    metadata=grant_metadata,
+                ))
+                edges.append(WritesEdge.create(
+                    self.organization_id,
+                    role_urn,
+                    table_urn,
+                    metadata=grant_metadata,
+                ))
+            elif privilege in _WRITE_PRIVILEGES:
+                edges.append(WritesEdge.create(
+                    self.organization_id,
+                    role_urn,
+                    table_urn,
+                    metadata=grant_metadata,
+                ))
+            else:
+                edges.append(ReadsEdge.create(
+                    self.organization_id,
+                    role_urn,
+                    table_urn,
+                    metadata=grant_metadata,
+                ))
 
         return nodes, edges
 
@@ -287,7 +310,7 @@ class PostgresLoader(ConceptLoader, abc.ABC):
         driver: BaseDiscoveryDriver,
         database_name: str,
     ) -> list[Edge]:
-        """Discover foreign-key relationships as DATA_TO_DATA edges."""
+        """Discover foreign-key relationships as ReferencesEdge edges."""
         edges: list[Edge] = []
 
         for fk in driver.discover_foreign_keys():
@@ -297,11 +320,10 @@ class PostgresLoader(ConceptLoader, abc.ABC):
             to_urn = self.build_urn(
                 database_name, fk.ref_schema, fk.ref_table, fk.ref_column,
             )
-            edges.append(make_edge(
+            edges.append(ReferencesEdge.create(
                 self.organization_id,
                 from_urn,
                 to_urn,
-                RelationType.DATA_TO_DATA,
                 metadata=EdgeMetadata({
                     EdgeMetadataKey.CONSTRAINT_NAME: fk.constraint_name,
                     EdgeMetadataKey.ORDINAL_POSITION: fk.ordinal_position,

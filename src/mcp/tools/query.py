@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
-
 from src.mcp._formatting import _format_node, _node_label
 from src.mcp.graph_store import GraphStore
 
@@ -29,7 +28,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         for ntype, count in node_counts.items():
             lines.append(f"  {ntype}: {count}")
         lines.append("")
-        lines.append("Edges by relation type:")
+        lines.append("Edges by edge type:")
         for etype, count in edge_counts.items():
             lines.append(f"  {etype}: {count}")
         lines.append("")
@@ -122,7 +121,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                 target_label = _node_label(target) if target else to_urn
                 target_type = target["node_type"] if target else "?"
                 lines.append(
-                    f"  --[{data.get('relation_type', '?')}]--> [{target_type}] {target_label}"
+                    f"  --[{data.get('edge_type', '?')}]--> [{target_type}] {target_label}"
                 )
                 for k, v in data.get("metadata", {}).items():
                     lines.append(f"      {k}: {v}")
@@ -135,7 +134,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                 source_label = _node_label(source) if source else from_urn
                 source_type = source["node_type"] if source else "?"
                 lines.append(
-                    f"  <--[{data.get('relation_type', '?')}]-- [{source_type}] {source_label}"
+                    f"  <--[{data.get('edge_type', '?')}]-- [{source_type}] {source_label}"
                 )
                 for k, v in data.get("metadata", {}).items():
                     lines.append(f"      {k}: {v}")
@@ -153,8 +152,8 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         Args:
             urn: The URN of the center node.
             direction: 'outgoing', 'incoming', or 'both' (default).
-            edge_type: Optional filter by relation type
-                       (CONTAINS, DATA_TO_DATA, CODE_TO_DATA, etc.).
+            edge_type: Optional filter by edge type
+                       (contains, calls, reads, writes, models, references, etc.).
         """
         if urn not in store.G:
             return f"No node found with URN: {urn}"
@@ -162,15 +161,15 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         edge_list: list[tuple[str, str, dict]] = []  # (neighbor_urn, arrow, data)
         if direction in ("outgoing", "both"):
             for _, to_urn, data in store.G.out_edges(urn, data=True):
-                if edge_type and data.get("relation_type") != edge_type:
+                if edge_type and data.get("edge_type") != edge_type:
                     continue
-                arrow = f"--[{data.get('relation_type', '?')}]-->"
+                arrow = f"--[{data.get('edge_type', '?')}]-->"
                 edge_list.append((to_urn, arrow, data))
         if direction in ("incoming", "both"):
             for from_urn, _, data in store.G.in_edges(urn, data=True):
-                if edge_type and data.get("relation_type") != edge_type:
+                if edge_type and data.get("edge_type") != edge_type:
                     continue
-                arrow = f"<--[{data.get('relation_type', '?')}]--"
+                arrow = f"<--[{data.get('edge_type', '?')}]--"
                 edge_list.append((from_urn, arrow, data))
 
         if not edge_list:

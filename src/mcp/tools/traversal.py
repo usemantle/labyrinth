@@ -3,8 +3,8 @@ from __future__ import annotations
 import collections
 
 import networkx as nx
-from mcp.server.fastmcp import FastMCP
 
+from mcp.server.fastmcp import FastMCP
 from src.mcp._formatting import _lookup_edge_label, _node_label
 from src.mcp.graph_store import GraphStore
 
@@ -13,7 +13,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
     @mcp.tool()
     def trace_data_path(
         start_urn: str,
-        edge_types: str = "DATA_TO_DATA,CODE_TO_DATA",
+        edge_types: str = "references,soft_reference,reads,writes,models",
         max_depth: int = 10,
         direction: str = "outgoing",
     ) -> str:
@@ -23,8 +23,8 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
 
         Args:
             start_urn: URN of the starting node.
-            edge_types: Comma-separated relation types to follow
-                        (e.g., 'DATA_TO_DATA,CODE_TO_DATA').
+            edge_types: Comma-separated edge types to follow
+                        (e.g., 'references,reads,writes,models').
             max_depth: Maximum traversal depth (default 10).
             direction: 'outgoing' (default), 'incoming', or 'both'.
         """
@@ -43,11 +43,11 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
 
             if direction in ("outgoing", "both"):
                 for _, to_urn, data in store.G.out_edges(current, data=True):
-                    if data.get("relation_type") in allowed and to_urn not in visited:
+                    if data.get("edge_type") in allowed and to_urn not in visited:
                         queue.append((to_urn, depth + 1))
             if direction in ("incoming", "both"):
                 for from_urn, _, data in store.G.in_edges(current, data=True):
-                    if data.get("relation_type") in allowed and from_urn not in visited:
+                    if data.get("edge_type") in allowed and from_urn not in visited:
                         queue.append((from_urn, depth + 1))
 
         if len(visited) <= 1:
@@ -110,7 +110,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             to_node = store.node_dict(to_urn)
             from_label = _node_label(from_node) if from_node else from_urn
             to_label = _node_label(to_node) if to_node else to_urn
-            lines.append(f"  {from_label} --[{data.get('relation_type', '?')}]--> {to_label}")
+            lines.append(f"  {from_label} --[{data.get('edge_type', '?')}]--> {to_label}")
 
         return "\n".join(lines)
 
@@ -127,8 +127,8 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         Args:
             from_urn: URN of the starting node.
             to_urn: URN of the target node.
-            edge_types: Optional comma-separated relation types to restrict
-                        traversal (e.g., 'CODE_TO_DATA,CODE_TO_CODE').
+            edge_types: Optional comma-separated edge types to restrict
+                        traversal (e.g., 'reads,writes,calls').
                         If empty, all edge types are followed.
         """
         if from_urn not in store.G:
@@ -140,7 +140,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             allowed = set(edge_types.split(","))
             view = nx.subgraph_view(
                 store.G,
-                filter_edge=lambda u, v, k: store.G.edges[u, v, k].get("relation_type") in allowed,
+                filter_edge=lambda u, v, k: store.G.edges[u, v, k].get("edge_type") in allowed,
             )
         else:
             view = store.G

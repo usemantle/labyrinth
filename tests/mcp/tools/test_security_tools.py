@@ -70,7 +70,7 @@ def _make_store_with_sensitive_data(tmp_path):
             "organization_id": ORG_ID,
             "from_urn": table_urn,
             "to_urn": col_urn,
-            "relation_type": "CONTAINS",
+            "edge_type": "contains",
             "metadata": {},
         },
         {
@@ -78,7 +78,7 @@ def _make_store_with_sensitive_data(tmp_path):
             "organization_id": ORG_ID,
             "from_urn": func_urn,
             "to_urn": table_urn,
-            "relation_type": "CODE_TO_DATA",
+            "edge_type": "reads",
             "metadata": {"detection_method": "orm_reference"},
         },
     ]

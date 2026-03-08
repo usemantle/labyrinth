@@ -174,7 +174,7 @@ async function main() {
           uuid: link.id,
           from_urn: link.from_urn,
           to_urn: link.to_urn,
-          relation_type: link.relation_type || "CODE_TO_DATA",
+          edge_type: link.edge_type || "CODE_TO_DATA",
           metadata: {
             detection_method: link.detection_method || "soft_link",
             confidence: link.confidence,
@@ -231,18 +231,18 @@ function buildGraph() {
   let edgeIdx = 0;
   for (const e of allEdges) {
     if (!graph.hasNode(e.from_urn) || !graph.hasNode(e.to_urn)) continue;
-    if (hiddenEdgeTypes.has(e.relation_type)) continue;
+    if (hiddenEdgeTypes.has(e.edge_type)) continue;
 
-    const isStructural = e.relation_type === "CONTAINS" &&
+    const isStructural = e.edge_type === "CONTAINS" &&
       STRUCTURAL_SOURCES.has(graph.getNodeAttribute(e.from_urn, "_type"));
     if (hideStructural && isStructural) continue;
 
-    const style = EDGE_STYLES[e.relation_type] || EDGE_STYLES.CONTAINS;
+    const style = EDGE_STYLES[e.edge_type] || EDGE_STYLES.CONTAINS;
     graph.addEdgeWithKey(`e-${edgeIdx++}`, e.from_urn, e.to_urn, {
       color: style.color,
       size: style.size,
       type: "arrow",
-      _relationType: e.relation_type,
+      _relationType: e.edge_type,
       _metadata: e.metadata,
     });
   }
@@ -432,7 +432,7 @@ function setupTooltip() {
 function updateStats() {
   const edgeCounts = {};
   for (const e of allEdges) {
-    edgeCounts[e.relation_type] = (edgeCounts[e.relation_type] || 0) + 1;
+    edgeCounts[e.edge_type] = (edgeCounts[e.edge_type] || 0) + 1;
   }
   const parts = [`Nodes: ${allNodes.length}`, `Edges: ${allEdges.length}`];
   for (const [k, v] of Object.entries(edgeCounts).sort()) {

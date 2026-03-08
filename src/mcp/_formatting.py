@@ -34,7 +34,7 @@ def _format_node(node: dict, compact: bool = False) -> str:
 
 def _format_edge_data(from_urn: str, to_urn: str, data: dict) -> str:
     """Format an edge as a readable string."""
-    parts = [f"{data.get('relation_type', '?')}: {from_urn} → {to_urn}"]
+    parts = [f"{data.get('edge_type', '?')}: {from_urn} → {to_urn}"]
     for k, v in data.get("metadata", {}).items():
         parts.append(f"  {k}: {v}")
     return "\n".join(parts)
@@ -45,8 +45,8 @@ def _lookup_edge_label(G: nx.MultiDiGraph, urn_a: str, urn_b: str) -> str:
     formatted arrow showing direction."""
     if G.has_edge(urn_a, urn_b):
         for _key, data in G[urn_a][urn_b].items():
-            return f"  --[{data.get('relation_type', '?')}]-->"
+            return f"  --[{data.get('edge_type', '?')}]-->"
     if G.has_edge(urn_b, urn_a):
         for _key, data in G[urn_b][urn_a].items():
-            return f"  <--[{data.get('relation_type', '?')}]--"
+            return f"  <--[{data.get('edge_type', '?')}]--"
     return "  --[?]-->"

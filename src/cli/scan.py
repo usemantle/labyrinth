@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 
 from src.graph.enrichment.sensitivity_classifier import enrich_sensitivity
-from src.graph.graph_models import Edge, Node, URN
+from src.graph.graph_models import URN, Edge, Node
 from src.graph.loaders import LOADER_REGISTRY
 from src.graph.loaders.loader import ConceptLoader
 from src.graph.sinks.sink import Sink
@@ -115,7 +115,7 @@ def run_scan(
     # Summarize
     by_type: dict[str, int] = {}
     for e in all_edges:
-        by_type[e.relation_type.value] = by_type.get(e.relation_type.value, 0) + 1
+        by_type[e.edge_type] = by_type.get(e.edge_type, 0) + 1
     logger.info(
         "Combined: %d nodes, %d edges (%s)",
         len(all_nodes), len(all_edges),

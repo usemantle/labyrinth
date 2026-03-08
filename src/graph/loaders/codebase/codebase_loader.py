@@ -19,18 +19,20 @@ from pathlib import Path
 
 from ast_grep_py import SgRoot
 
+from src.graph.edges.contains_edge import ContainsEdge
 from src.graph.graph_models import (
     URN,
     Edge,
     Node,
-    NodeMetadata,
     NodeMetadataKey,
-    RelationType,
 )
-from src.graph.loaders._helpers import make_edge
 from src.graph.loaders.codebase.plugins._base import CodebasePlugin
 from src.graph.loaders.codebase.resolvers import LANGUAGE_ANALYZERS
 from src.graph.loaders.loader import ConceptLoader
+from src.graph.nodes.class_node import ClassNode
+from src.graph.nodes.codebase_node import CodebaseNode
+from src.graph.nodes.file_node import FileNode
+from src.graph.nodes.function_node import FunctionNode
 
 logger = logging.getLogger(__name__)
 
@@ -219,18 +221,16 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
             language = self._detect_language(file_path)
 
             file_urn = self.build_urn(root_name, rel_path)
-            nodes.append(Node(
-                organization_id=self.organization_id,
-                urn=file_urn,
-                parent_urn=codebase_urn,
-                metadata=NodeMetadata({
-                    NodeMetadataKey.FILE_PATH: rel_path,
-                    NodeMetadataKey.LANGUAGE: language or "unknown",
-                    NodeMetadataKey.SIZE_BYTES: file_path.stat().st_size,
-                }),
+            nodes.append(FileNode.create(
+                self.organization_id,
+                file_urn,
+                codebase_urn,
+                file_path=rel_path,
+                language=language or "unknown",
+                size_bytes=file_path.stat().st_size,
             ))
-            edges.append(make_edge(
-                self.organization_id, codebase_urn, file_urn, RelationType.CONTAINS,
+            edges.append(ContainsEdge.create(
+                self.organization_id, codebase_urn, file_urn,
             ))
 
             # AST analysis for supported languages
@@ -293,14 +293,11 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
         Override in subclasses to add provider-specific metadata
         (e.g. scanned_commit, default_branch, visibility).
         """
-        return Node(
-            organization_id=self.organization_id,
-            urn=codebase_urn,
-            parent_urn=None,
-            metadata=NodeMetadata({
-                NodeMetadataKey.REPO_NAME: root_name,
-                NodeMetadataKey.FILE_COUNT: file_count,
-            }),
+        return CodebaseNode.create(
+            self.organization_id,
+            codebase_urn,
+            repo_name=root_name,
+            file_count=file_count,
         )
 
     # ------------------------------------------------------------------
@@ -459,21 +456,17 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
                 r = actual.range()
                 base_classes = self._extract_base_classes(actual)
 
-                meta = NodeMetadata({
-                    NodeMetadataKey.CLASS_NAME: class_name,
-                    NodeMetadataKey.FILE_PATH: rel_path,
-                    NodeMetadataKey.START_LINE: r.start.line,
-                    NodeMetadataKey.END_LINE: r.end.line,
-                })
-                if base_classes:
-                    meta[NodeMetadataKey.BASE_CLASSES] = base_classes
-
-                class_node = Node(
-                    organization_id=self.organization_id,
-                    urn=class_urn,
-                    parent_urn=parent_urn,
-                    metadata=meta,
+                class_node = ClassNode.create(
+                    self.organization_id,
+                    class_urn,
+                    parent_urn,
+                    class_name=class_name,
+                    start_line=r.start.line,
+                    end_line=r.end.line,
                 )
+                class_node.metadata[NodeMetadataKey.FILE_PATH] = rel_path
+                if base_classes:
+                    class_node.metadata[NodeMetadataKey.BASE_CLASSES] = base_classes
 
                 # Run plugins on class node
                 body = actual.field("body")
@@ -483,8 +476,8 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
                         class_node = plugin.on_class_node(class_node, body_source)
 
                 nodes.append(class_node)
-                edges.append(make_edge(
-                    self.organization_id, parent_urn, class_urn, RelationType.CONTAINS,
+                edges.append(ContainsEdge.create(
+                    self.organization_id, parent_urn, class_urn,
                 ))
 
                 # Recurse into class body
@@ -511,18 +504,16 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
                 r = actual.range()
                 is_method = len(name_chain) > 0
 
-                func_node = Node(
-                    organization_id=self.organization_id,
-                    urn=func_urn,
-                    parent_urn=parent_urn,
-                    metadata=NodeMetadata({
-                        NodeMetadataKey.FUNCTION_NAME: func_name,
-                        NodeMetadataKey.FILE_PATH: rel_path,
-                        NodeMetadataKey.START_LINE: r.start.line,
-                        NodeMetadataKey.END_LINE: r.end.line,
-                        NodeMetadataKey.IS_METHOD: is_method,
-                    }),
+                func_node = FunctionNode.create(
+                    self.organization_id,
+                    func_urn,
+                    parent_urn,
+                    function_name=func_name,
+                    start_line=r.start.line,
+                    end_line=r.end.line,
+                    is_method=is_method,
                 )
+                func_node.metadata[NodeMetadataKey.FILE_PATH] = rel_path
 
                 # Run plugins on function node (child.text() includes decorators)
                 func_source = child.text()
@@ -531,8 +522,8 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
                         func_node = plugin.on_function_node(func_node, func_source)
 
                 nodes.append(func_node)
-                edges.append(make_edge(
-                    self.organization_id, parent_urn, func_urn, RelationType.CONTAINS,
+                edges.append(ContainsEdge.create(
+                    self.organization_id, parent_urn, func_urn,
                 ))
 
             elif kind in config.transparent_kinds:

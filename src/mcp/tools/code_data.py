@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import networkx as nx
-from mcp.server.fastmcp import FastMCP
 
+from mcp.server.fastmcp import FastMCP
 from src.mcp._formatting import _node_label
 from src.mcp.graph_store import GraphStore
 
@@ -11,7 +11,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
     @mcp.tool()
     def find_code_for_table(table_name: str) -> str:
         """Given a database table name, find all code nodes (ORM classes and
-        functions) that reference it via CODE_TO_DATA edges. Shows detection
+        functions) that reference it via reads/writes/models edges. Shows detection
         method and confidence for each link."""
         table_urn = store.tables_by_name.get(table_name)
         if not table_urn:
@@ -21,7 +21,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         code_edges = [
             (from_urn, data)
             for from_urn, _, data in store.G.in_edges(table_urn, data=True)
-            if data.get("relation_type") == "CODE_TO_DATA"
+            if data.get("edge_type") in {"reads", "writes", "models"}
         ]
 
         if not code_edges:
@@ -60,7 +60,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
     @mcp.tool()
     def find_tables_for_code(name: str) -> str:
         """Given a function or class name, find all database tables it
-        references via CODE_TO_DATA edges."""
+        references via reads/writes/models edges."""
         matching = []
         for ntype in ("function", "class"):
             key = "function_name" if ntype == "function" else "class_name"
@@ -78,7 +78,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             code_edges = [
                 (to_urn, data)
                 for _, to_urn, data in store.G.out_edges(urn, data=True)
-                if data.get("relation_type") == "CODE_TO_DATA"
+                if data.get("edge_type") in {"reads", "writes", "models"}
             ]
 
             label = _node_label(node)
@@ -102,12 +102,13 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
 
     @mcp.tool()
     def find_orphaned_tables() -> str:
-        """Find all database tables that have NO CODE_TO_DATA edges pointing
+        """Find all database tables that have no reads/writes/models edges pointing
         to them. These are potential orphaned resources with no known code
         references in the scanned codebase."""
         referenced_urns: set[str] = set()
-        for _from, to, _key in store.edges_by_type.get("CODE_TO_DATA", []):
-            referenced_urns.add(to)
+        for edge_type in ("reads", "writes", "models"):
+            for _from, to, _key in store.edges_by_type.get(edge_type, []):
+                referenced_urns.add(to)
 
         orphaned = []
         for table_urn in store.nodes_by_type.get("table", []):
@@ -126,10 +127,10 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
 
             data_edge_count = 0
             for _, _, d in store.G.out_edges(table["urn"], data=True):
-                if d.get("relation_type") == "DATA_TO_DATA":
+                if d.get("edge_type") in {"references", "soft_reference"}:
                     data_edge_count += 1
             for _, _, d in store.G.in_edges(table["urn"], data=True):
-                if d.get("relation_type") == "DATA_TO_DATA":
+                if d.get("edge_type") in {"references", "soft_reference"}:
                     data_edge_count += 1
             if data_edge_count:
                 lines.append(f"    FK relationships: {data_edge_count}")
@@ -146,15 +147,16 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                         for all tables that have code references.
         """
         table_map: dict[str, list[tuple[str, dict]]] = {}
-        for from_urn, to_urn, _key in store.edges_by_type.get("CODE_TO_DATA", []):
-            target = store.node_dict(to_urn)
-            if not target or target.get("node_type") != "table":
-                continue
-            t_name = target["metadata"].get("table_name", "?")
-            if table_name and t_name != table_name:
-                continue
-            edge_data = store.G.edges[from_urn, to_urn, _key]
-            table_map.setdefault(t_name, []).append((from_urn, edge_data))
+        for edge_type in ("reads", "writes", "models"):
+            for from_urn, to_urn, _key in store.edges_by_type.get(edge_type, []):
+                target = store.node_dict(to_urn)
+                if not target or target.get("node_type") != "table":
+                    continue
+                t_name = target["metadata"].get("table_name", "?")
+                if table_name and t_name != table_name:
+                    continue
+                edge_data = store.G.edges[from_urn, to_urn, _key]
+                table_map.setdefault(t_name, []).append((from_urn, edge_data))
 
         if not table_map:
             if table_name:
@@ -192,8 +194,8 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
 
     @mcp.tool()
     def find_data_hubs(min_tables: int = 3, limit: int = 10) -> str:
-        """Find clusters of interconnected functions (via CODE_TO_CODE call
-        chains) that collectively touch many database tables (via CODE_TO_DATA).
+        """Find clusters of interconnected functions (via call edges)
+        that collectively touch many database tables (via reads/writes/models).
         Useful for identifying the most complex and data-heavy parts of the
         codebase.
 
@@ -202,7 +204,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                         included (default 3).
             limit: Maximum number of clusters to return (default 10).
         """
-        c2c_triples = store.edges_by_type.get("CODE_TO_CODE", [])
+        c2c_triples = store.edges_by_type.get("calls", [])
         c2c_nodes: set[str] = set()
         c2c_graph = nx.DiGraph()
         for from_urn, to_urn, _key in c2c_triples:
@@ -212,7 +214,9 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
 
         components: list[set[str]] = list(nx.weakly_connected_components(c2c_graph))
 
-        c2d_triples = store.edges_by_type.get("CODE_TO_DATA", [])
+        c2d_triples = []
+        for et in ("reads", "writes", "models"):
+            c2d_triples.extend(store.edges_by_type.get(et, []))
         code_nodes_with_data = set()
         for from_urn, _to, _key in c2d_triples:
             code_nodes_with_data.add(from_urn)
@@ -226,7 +230,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             tables_by_func: dict[str, list[str]] = {}
             for func_urn in component:
                 for _, to_urn, data in store.G.out_edges(func_urn, data=True):
-                    if data.get("relation_type") != "CODE_TO_DATA":
+                    if data.get("edge_type") not in {"reads", "writes", "models"}:
                         continue
                     target = store.node_dict(to_urn)
                     if target and target.get("node_type") == "table":
@@ -265,7 +269,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                         to_node = store.node_dict(to_urn)
                         from_name = from_node["metadata"].get("function_name", "?") if from_node else "?"
                         to_name = to_node["metadata"].get("function_name", "?") if to_node else "?"
-                        internal_edges.append(f"    {from_name} --[CODE_TO_CODE]--> {to_name}")
+                        internal_edges.append(f"    {from_name} --[calls]--> {to_name}")
 
             if internal_edges:
                 lines.append("  Call chain:")

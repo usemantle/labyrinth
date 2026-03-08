@@ -2,9 +2,9 @@
 
 import uuid
 
-from src.graph.graph_models import Edge, EdgeMetadata, RelationType, URN
+from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata, RelationType
 
-EDGE_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "dsec:graph:edge")
+__all__ = ["EDGE_NAMESPACE", "make_edge"]
 
 
 def make_edge(

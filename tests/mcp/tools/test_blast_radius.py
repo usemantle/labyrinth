@@ -29,12 +29,12 @@ def _write_graph(tmp_path, nodes, edges):
 
 def _make_blast_store(tmp_path):
     """Build a synthetic graph:
-    func_a -> func_b (CODE_TO_CODE)
-    func_b -> table_users (CODE_TO_DATA)
-    table_users -> table_orders (DATA_TO_DATA via FK)
-    table_users contains col_email (CONTAINS)
-    func_a -> dep_requests (DEPENDS_ON)
-    role_reader -> table_users (PRINCIPAL_TO_DATA)
+    func_a -> func_b (calls)
+    func_b -> table_users (reads)
+    table_users -> table_orders (references via FK)
+    table_users contains col_email (contains)
+    func_a -> dep_requests (depends_on)
+    role_reader -> table_users (reads)
     """
     nodes = [
         {"urn": "urn:test:::func_a", "organization_id": ORG_ID, "parent_urn": None,
@@ -69,30 +69,30 @@ def _make_blast_store(tmp_path):
     edges = [
         {"uuid": str(uuid.uuid4()), "organization_id": ORG_ID,
          "from_urn": "urn:test:::func_a", "to_urn": "urn:test:::func_b",
-         "relation_type": "CODE_TO_CODE", "metadata": {}},
+         "edge_type": "calls", "metadata": {}},
         {"uuid": str(uuid.uuid4()), "organization_id": ORG_ID,
          "from_urn": "urn:test:::func_b", "to_urn": "urn:test:::table_users",
-         "relation_type": "CODE_TO_DATA", "metadata": {}},
+         "edge_type": "reads", "metadata": {}},
         {"uuid": str(uuid.uuid4()), "organization_id": ORG_ID,
          "from_urn": "urn:test:::table_users", "to_urn": "urn:test:::table_orders",
-         "relation_type": "DATA_TO_DATA", "metadata": {}},
+         "edge_type": "references", "metadata": {}},
         {"uuid": str(uuid.uuid4()), "organization_id": ORG_ID,
          "from_urn": "urn:test:::table_users", "to_urn": "urn:test:::col_email",
-         "relation_type": "CONTAINS", "metadata": {}},
+         "edge_type": "contains", "metadata": {}},
         {"uuid": str(uuid.uuid4()), "organization_id": ORG_ID,
          "from_urn": "urn:test:::func_a", "to_urn": "urn:test:::dep_requests",
-         "relation_type": "DEPENDS_ON", "metadata": {}},
+         "edge_type": "depends_on", "metadata": {}},
         {"uuid": str(uuid.uuid4()), "organization_id": ORG_ID,
          "from_urn": "urn:test:::role_reader", "to_urn": "urn:test:::table_users",
-         "relation_type": "PRINCIPAL_TO_DATA", "metadata": {"privilege": "SELECT"}},
-        # endpoint_get -> func_b (CODE_TO_CODE)
+         "edge_type": "reads", "metadata": {"privilege": "SELECT"}},
+        # endpoint_get -> func_b (calls)
         {"uuid": str(uuid.uuid4()), "organization_id": ORG_ID,
          "from_urn": "urn:test:::endpoint_get", "to_urn": "urn:test:::func_b",
-         "relation_type": "CODE_TO_CODE", "metadata": {}},
-        # endpoint_get -> table_users (CODE_TO_DATA)
+         "edge_type": "calls", "metadata": {}},
+        # endpoint_get -> table_users (reads)
         {"uuid": str(uuid.uuid4()), "organization_id": ORG_ID,
          "from_urn": "urn:test:::endpoint_get", "to_urn": "urn:test:::table_users",
-         "relation_type": "CODE_TO_DATA", "metadata": {}},
+         "edge_type": "reads", "metadata": {}},
     ]
     path = _write_graph(tmp_path, nodes, edges)
     return GraphStore(path)

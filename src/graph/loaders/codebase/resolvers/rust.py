@@ -16,14 +16,13 @@ from typing import TYPE_CHECKING
 
 from ast_grep_py import SgRoot
 
+from src.graph.edges.calls_edge import CallsEdge
 from src.graph.graph_models import (
     Edge,
     EdgeMetadataKey,
     Node,
     NodeMetadataKey,
-    RelationType,
 )
-from src.graph.loaders._helpers import make_edge
 from src.graph.loaders.codebase.resolvers._base import (
     CallSite,
     LanguageAnalyzer,
@@ -79,10 +78,9 @@ class RustAnalyzer(LanguageAnalyzer):
                 )
                 if target is None:
                     continue
-                edge = make_edge(
+                edge = CallsEdge.create(
                     context.organization_id,
                     node.urn, target.urn,
-                    RelationType.CODE_TO_CODE,
                 )
                 edge.metadata[EdgeMetadataKey.CALL_TYPE] = call.call_type
                 new_edges.append(edge)

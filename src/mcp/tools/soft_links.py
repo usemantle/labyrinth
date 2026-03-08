@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from mcp.server.fastmcp import FastMCP
-
 from src.mcp._formatting import _node_label
 from src.mcp.graph_store import EDGE_NAMESPACE, GraphStore
 
@@ -17,7 +16,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         confidence: float = 0.7,
         note: str = "",
     ) -> str:
-        """Manually create a CODE_TO_DATA edge between two URNs. The link is
+        """Manually create a soft_reference edge between two URNs. The link is
         persisted to soft_links.json and immediately added to the in-memory
         graph.
 
@@ -36,10 +35,10 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             if existing["from_urn"] == from_urn and existing["to_urn"] == to_urn:
                 return f"Error: soft link already exists (id={existing['id']})"
 
-        relation_type = "CODE_TO_DATA"
+        edge_type = "soft_reference"
         link_id = str(uuid.uuid4())
         edge_key = str(uuid.uuid5(
-            EDGE_NAMESPACE, f"{from_urn}:{to_urn}:{relation_type}"
+            EDGE_NAMESPACE, f"{from_urn}:{to_urn}:{edge_type}"
         ))
         org_id = store.G.nodes[from_urn].get("organization_id")
 
@@ -47,17 +46,17 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             "id": link_id,
             "from_urn": from_urn,
             "to_urn": to_urn,
-            "relation_type": relation_type,
+            "edge_type": edge_type,
             "detection_method": "soft_link",
             "confidence": confidence,
             "note": note,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
 
         store.soft_links.append(link)
         store.G.add_edge(
             from_urn, to_urn, key=edge_key,
-            relation_type=relation_type,
+            edge_type=edge_type,
             metadata={
                 "detection_method": "soft_link",
                 "confidence": confidence,
@@ -65,7 +64,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             },
             organization_id=org_id,
         )
-        store.edges_by_type.setdefault(relation_type, []).append(
+        store.edges_by_type.setdefault(edge_type, []).append(
             (from_urn, to_urn, edge_key)
         )
         store._save_soft_links()
@@ -74,7 +73,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         to_label = _node_label(store.node_dict(to_urn))
         return (
             f"Soft link created (id={link_id}):\n"
-            f"  {from_label} --[CODE_TO_DATA]--> {to_label}\n"
+            f"  {from_label} --[soft_reference]--> {to_label}\n"
             f"  confidence={confidence}, note={note!r}"
         )
 
@@ -121,18 +120,18 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
 
         from_urn = target_link["from_urn"]
         to_urn = target_link["to_urn"]
-        relation_type = target_link.get("relation_type", "CODE_TO_DATA")
+        edge_type = target_link.get("edge_type", "soft_reference")
         edge_key = str(uuid.uuid5(
-            EDGE_NAMESPACE, f"{from_urn}:{to_urn}:{relation_type}"
+            EDGE_NAMESPACE, f"{from_urn}:{to_urn}:{edge_type}"
         ))
 
         if store.G.has_edge(from_urn, to_urn, key=edge_key):
             store.G.remove_edge(from_urn, to_urn, key=edge_key)
 
         edge_tuple = (from_urn, to_urn, edge_key)
-        if relation_type in store.edges_by_type:
+        if edge_type in store.edges_by_type:
             try:
-                store.edges_by_type[relation_type].remove(edge_tuple)
+                store.edges_by_type[edge_type].remove(edge_tuple)
             except ValueError:
                 pass
 

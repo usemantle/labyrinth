@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
-
 from src.mcp.graph_store import GraphStore
 from src.mcp.tools import code_data, query, security, soft_links, traversal
 

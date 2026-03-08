@@ -14,7 +14,9 @@ from src.drivers.sql.models import (
     SchemaMetadata,
     TableMetadata,
 )
-from src.graph.graph_models import NodeMetadataKey, RelationType
+from src.graph.edges.reads_edge import ReadsEdge
+from src.graph.edges.writes_edge import WritesEdge
+from src.graph.graph_models import NodeMetadataKey
 from src.graph.loaders.postgres.onprem_postgres_loader import OnPremPostgresLoader
 from src.graph.sinks.json_file_sink import classify_node
 from src.mcp.graph_store import GraphStore
@@ -112,7 +114,7 @@ class TestRoleNodes:
 
 
 class TestGrantEdges:
-    def test_principal_to_data_edges_from_grants(self):
+    def test_grant_edges_from_grants(self):
         roles = [RoleMetadata(role_name="app_user", can_login=True, is_superuser=False)]
         grants = [
             GrantMetadata(
@@ -124,9 +126,10 @@ class TestGrantEdges:
             ),
         ]
         _, edges = _load_with_mock(roles=roles, grants=grants)
-        p2d = [e for e in edges if e.relation_type == RelationType.PRINCIPAL_TO_DATA]
-        assert len(p2d) == 1
-        assert p2d[0].metadata["privilege"] == "SELECT"
+        grant_edges = [e for e in edges if isinstance(e, (ReadsEdge, WritesEdge))]
+        assert len(grant_edges) == 1
+        assert isinstance(grant_edges[0], ReadsEdge)
+        assert grant_edges[0].metadata["privilege"] == "SELECT"
 
     def test_multiple_privileges_multiple_edges(self):
         roles = [RoleMetadata(role_name="app_user", can_login=True, is_superuser=False)]
@@ -137,14 +140,18 @@ class TestGrantEdges:
                           table_name="users", privilege_type="INSERT", is_grantable=False),
         ]
         _, edges = _load_with_mock(roles=roles, grants=grants)
-        p2d = [e for e in edges if e.relation_type == RelationType.PRINCIPAL_TO_DATA]
-        assert len(p2d) == 2
+        grant_edges = [e for e in edges if isinstance(e, (ReadsEdge, WritesEdge))]
+        assert len(grant_edges) == 2
+        reads = [e for e in grant_edges if isinstance(e, ReadsEdge)]
+        writes = [e for e in grant_edges if isinstance(e, WritesEdge)]
+        assert len(reads) == 1
+        assert len(writes) == 1
 
     def test_no_grants_no_edges(self):
         roles = [RoleMetadata(role_name="app_user", can_login=True, is_superuser=False)]
         _, edges = _load_with_mock(roles=roles, grants=[])
-        p2d = [e for e in edges if e.relation_type == RelationType.PRINCIPAL_TO_DATA]
-        assert len(p2d) == 0
+        grant_edges = [e for e in edges if isinstance(e, (ReadsEdge, WritesEdge))]
+        assert len(grant_edges) == 0
 
     def test_grant_for_unknown_role_ignored(self):
         """Grants for roles not in the discovered roles list are skipped."""
@@ -154,8 +161,8 @@ class TestGrantEdges:
                           table_name="users", privilege_type="SELECT", is_grantable=False),
         ]
         _, edges = _load_with_mock(roles=roles, grants=grants)
-        p2d = [e for e in edges if e.relation_type == RelationType.PRINCIPAL_TO_DATA]
-        assert len(p2d) == 0
+        grant_edges = [e for e in edges if isinstance(e, (ReadsEdge, WritesEdge))]
+        assert len(grant_edges) == 0
 
 
 # ── Integration test ──────────────────────────────────────────────────
@@ -178,11 +185,11 @@ class TestIntegration:
         assert len(table_nodes) == 1
         assert len(role_nodes) == 1
 
-        # Should have PRINCIPAL_TO_DATA edge
-        p2d = [e for e in edges if e.relation_type == RelationType.PRINCIPAL_TO_DATA]
-        assert len(p2d) == 1
-        assert str(p2d[0].from_urn) == str(role_nodes[0].urn)
-        assert str(p2d[0].to_urn) == str(table_nodes[0].urn)
+        # Should have a ReadsEdge (SELECT privilege)
+        grant_edges = [e for e in edges if isinstance(e, (ReadsEdge, WritesEdge))]
+        assert len(grant_edges) == 1
+        assert str(grant_edges[0].from_urn) == str(role_nodes[0].urn)
+        assert str(grant_edges[0].to_urn) == str(table_nodes[0].urn)
 
 
 # ── MCP tool test ─────────────────────────────────────────────────────
@@ -207,7 +214,7 @@ class TestMCPDatabasePermissions:
             "organization_id": org,
             "from_urn": role_urn,
             "to_urn": table_urn,
-            "relation_type": "PRINCIPAL_TO_DATA",
+            "edge_type": "reads",
             "metadata": {"privilege": "SELECT"},
         }]
 
@@ -236,7 +243,7 @@ class TestMCPDatabasePermissions:
             "organization_id": org,
             "from_urn": role_urn,
             "to_urn": table_urn,
-            "relation_type": "PRINCIPAL_TO_DATA",
+            "edge_type": "reads",
             "metadata": {"privilege": "ALL"},
         }]
 
