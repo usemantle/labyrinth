@@ -479,7 +479,8 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
                 body = actual.field("body")
                 body_source = body.text() if body else ""
                 for plugin in self._plugins:
-                    class_node = plugin.on_class_node(class_node, body_source, language)
+                    if language in plugin.supported_languages():
+                        class_node = plugin.on_class_node(class_node, body_source)
 
                 nodes.append(class_node)
                 edges.append(make_edge(

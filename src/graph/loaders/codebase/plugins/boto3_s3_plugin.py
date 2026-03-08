@@ -96,11 +96,8 @@ class Boto3S3Plugin(CodebasePlugin):
     def on_class_node(
         self,
         node: Node,
-        class_body_source: str,
-        language: str,
+        class_body_source: str
     ) -> Node:
-        if language != "python":
-            return node
 
         if _S3_CLIENT_RE.search(class_body_source):
             node.metadata[NK.AWS_S3_CLIENT] = True

@@ -7,8 +7,6 @@ and that the loader works without plugins (backward compat).
 
 import uuid
 
-import pytest
-
 from src.graph.graph_models import (
     NodeMetadataKey,
 )
@@ -30,8 +28,8 @@ class _TrackingPlugin(CodebasePlugin):
     def supported_languages(self):
         return {'python'}
 
-    def on_class_node(self, node, class_body_source, language):
-        self.class_calls.append((node.metadata.get(NK.CLASS_NAME), language))
+    def on_class_node(self, node, class_body_source):
+        self.class_calls.append(node.metadata.get(NK.CLASS_NAME))
         node.metadata[NK.ORM_TABLE] = "__tracked__"
         return node
 
@@ -54,7 +52,7 @@ def test_plugin_receives_class_nodes(tmp_path):
     nodes, _ = loader.load(str(repo))
 
     assert len(plugin.class_calls) == 1
-    assert plugin.class_calls[0] == ("User", "python")
+    assert plugin.class_calls[0] == "User"
 
     user = next(n for n in nodes if n.metadata.get(NK.CLASS_NAME) == "User")
     assert user.metadata[NK.ORM_TABLE] == "__tracked__"
@@ -77,7 +75,7 @@ def test_plugin_receives_function_nodes(tmp_path):
 
 
 def test_plugin_skips_non_python_for_language_check(tmp_path):
-    """Plugin receives the correct language for JS files."""
+    """Python-only plugin is not called for JS files."""
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "app.js").write_text(
@@ -89,8 +87,8 @@ def test_plugin_skips_non_python_for_language_check(tmp_path):
     loader = FileSystemCodebaseLoader(organization_id=ORG_ID, plugins=[plugin])
     loader.load(str(repo))
 
-    assert all(lang == "javascript" for _, lang in plugin.class_calls)
-    assert all(lang == "javascript" for _, lang in plugin.function_calls)
+    assert len(plugin.class_calls) == 0
+    assert len(plugin.function_calls) == 0
 
 
 def test_multiple_plugins_chain(tmp_path):
@@ -100,12 +98,18 @@ def test_multiple_plugins_chain(tmp_path):
     (repo / "m.py").write_text('class Foo:\n    pass\n')
 
     class PluginA(CodebasePlugin):
-        def on_class_node(self, node, src, lang):
+        def supported_languages(self):
+            return {"python"}
+
+        def on_class_node(self, node, src):
             node.metadata[NK.ORM_TABLE] = "test_chain"
             return node
 
     class PluginB(CodebasePlugin):
-        def on_class_node(self, node, src, lang):
+        def supported_languages(self):
+            return {"python"}
+
+        def on_class_node(self, node, src):
             node.metadata[NK.ORM_FRAMEWORK] = node.metadata.get(NK.ORM_TABLE, "")
             return node
 
@@ -121,7 +125,6 @@ def test_multiple_plugins_chain(tmp_path):
 
 def test_no_plugins_backward_compat(tmp_path):
     """Loader works normally without plugins (backward compat)."""
-    from pathlib import Path
 
     repo = tmp_path / "my-repo"
     repo.mkdir()

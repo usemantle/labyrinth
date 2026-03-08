@@ -41,8 +41,7 @@ class CodebasePlugin:
     def on_class_node(
         self,
         node: Node,
-        class_body_source: str,
-        language: str,
+        class_body_source: str
     ) -> Node:
         """Called after a class node is extracted.
 

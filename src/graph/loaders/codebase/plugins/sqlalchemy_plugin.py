@@ -70,11 +70,7 @@ class SQLAlchemyPlugin(CodebasePlugin):
         self,
         node: Node,
         class_body_source: str,
-        language: str,
     ) -> Node:
-        if language != "python":
-            return node
-
         match = _TABLENAME_RE.search(class_body_source)
         if match:
             node.metadata[NK.ORM_TABLE] = match.group(1)
