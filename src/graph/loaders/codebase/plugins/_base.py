@@ -28,6 +28,16 @@ class CodebasePlugin:
     are no-ops that return the node unchanged.
     """
 
+    def supported_languages(self) -> set[str]:
+        """Return the set of languages this plugin supports.
+
+        Returns None if the plugin handles all languages (the plugin
+        is responsible for filtering in its hooks). Returns a set of
+        language names (e.g. ``{"python"}``) to restrict when the
+        loader invokes this plugin.
+        """
+        return set()
+
     def on_class_node(
         self,
         node: Node,
@@ -50,7 +60,6 @@ class CodebasePlugin:
         self,
         node: Node,
         function_source: str,
-        language: str,
     ) -> Node:
         """Called after a function/method node is extracted.
 

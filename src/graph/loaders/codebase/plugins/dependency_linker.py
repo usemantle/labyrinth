@@ -42,6 +42,10 @@ class DependencyLinkerPlugin(CodebasePlugin, abc.ABC):
     - ``resolve_import_names``: map a package name to its import name(s)
     """
 
+    def supported_languages(self) -> set[str] | None:
+        """Restrict to the language this linker handles."""
+        return {self.language()}
+
     @abc.abstractmethod
     def language(self) -> str:
         """Return the language this linker supports (e.g. 'python')."""

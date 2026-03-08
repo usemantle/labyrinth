@@ -21,14 +21,14 @@ _REQUESTS_SESSION_RE = re.compile(r"\brequests\.Session\s*\(")
 class RequestsPlugin(CodebasePlugin):
     """Detects requests library HTTP calls (egress/network)."""
 
+    def supported_languages(self) -> set[str]:
+        return {"python"}
+
     def on_function_node(
         self,
         node: Node,
-        function_source: str,
-        language: str,
+        function_source: str
     ) -> Node:
-        if language != "python":
-            return node
 
         if _REQUESTS_CALL_RE.search(function_source) or _REQUESTS_SESSION_RE.search(function_source):
             node.metadata[NodeMetadataKey.IO_DIRECTION] = "egress"

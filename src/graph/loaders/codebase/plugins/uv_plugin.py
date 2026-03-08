@@ -36,6 +36,9 @@ logger = logging.getLogger(__name__)
 class UvPlugin(CodebasePlugin):
     """Scans uv.lock for dependencies and checks CVEs via OSV.dev."""
 
+    def supported_languages(self) -> set[str] | None:
+        return {"python"}
+
     def post_process(
         self,
         nodes: list[Node],

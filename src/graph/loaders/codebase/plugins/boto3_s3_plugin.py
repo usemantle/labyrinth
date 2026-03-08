@@ -9,7 +9,6 @@ Tier-1 only: no abstraction-layer tracing, no edge creation.
 """
 
 import re
-from typing import Optional
 
 from src.graph.graph_models import Node, NodeMetadataKey
 from src.graph.loaders.codebase.plugins._base import CodebasePlugin
@@ -54,7 +53,7 @@ def _classify_operation(op: str) -> str:
     return "read"
 
 
-def _detect_operations(source: str) -> Optional[tuple[str, str]]:
+def _detect_operations(source: str) -> tuple[str, str] | None:
     """Detect S3 operations in source text.
 
     Returns:
@@ -91,6 +90,9 @@ NK = NodeMetadataKey
 class Boto3S3Plugin(CodebasePlugin):
     """Detects boto3 S3 client creation and S3 API calls in Python code."""
 
+    def supported_languages(self) -> set[str]:
+        return {"python"}
+
     def on_class_node(
         self,
         node: Node,
@@ -109,11 +111,7 @@ class Boto3S3Plugin(CodebasePlugin):
         self,
         node: Node,
         function_source: str,
-        language: str,
     ) -> Node:
-        if language != "python":
-            return node
-
         if _S3_CLIENT_RE.search(function_source):
             node.metadata[NK.AWS_S3_CLIENT] = True
 
