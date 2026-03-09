@@ -5,14 +5,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata, RelationType
+from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata
 
 
 @dataclass
 class CallsEdge(Edge):
     """A function calling another function."""
 
-    relation_type: RelationType = RelationType.CODE_TO_CODE
     edge_type: str = "calls"
 
     @classmethod
@@ -26,7 +25,7 @@ class CallsEdge(Edge):
     ) -> CallsEdge:
         edge_uuid = uuid.uuid5(
             EDGE_NAMESPACE,
-            f"{from_urn}:{to_urn}:{RelationType.CODE_TO_CODE.value}",
+            f"{from_urn}:{to_urn}:CODE_TO_CODE",
         )
         return cls(
             uuid=edge_uuid,

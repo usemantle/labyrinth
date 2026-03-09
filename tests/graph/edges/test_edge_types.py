@@ -16,7 +16,7 @@ from src.graph.edges import (
     SoftReferenceEdge,
     WritesEdge,
 )
-from src.graph.graph_models import URN, Edge, EdgeMetadata, EdgeMetadataKey, RelationType
+from src.graph.graph_models import URN, Edge, EdgeMetadata, EdgeMetadataKey
 
 ORG_ID = uuid.uuid4()
 FROM_URN = URN("urn:test:test:::from")
@@ -35,25 +35,24 @@ class TestEdgeSubclassIsEdge:
         assert issubclass(edge_cls, Edge)
 
 
-class TestEdgeTypeAndRelationType:
-    """Each typed edge must have correct edge_type and relation_type."""
+class TestEdgeType:
+    """Each typed edge must have correct edge_type."""
 
-    @pytest.mark.parametrize("edge_cls,expected_edge_type,expected_relation_type", [
-        (ContainsEdge, "contains", RelationType.CONTAINS),
-        (HostsEdge, "hosts", RelationType.HOSTS),
-        (CallsEdge, "calls", RelationType.CODE_TO_CODE),
-        (InstantiatesEdge, "instantiates", RelationType.CODE_TO_CODE),
-        (ReadsEdge, "reads", RelationType.CODE_TO_DATA),
-        (WritesEdge, "writes", RelationType.CODE_TO_DATA),
-        (ModelsEdge, "models", RelationType.CODE_TO_DATA),
-        (ReferencesEdge, "references", RelationType.DATA_TO_DATA),
-        (SoftReferenceEdge, "soft_reference", RelationType.DATA_TO_DATA),
-        (DependsOnEdge, "depends_on", RelationType.DEPENDS_ON),
+    @pytest.mark.parametrize("edge_cls,expected_edge_type", [
+        (ContainsEdge, "contains"),
+        (HostsEdge, "hosts"),
+        (CallsEdge, "calls"),
+        (InstantiatesEdge, "instantiates"),
+        (ReadsEdge, "reads"),
+        (WritesEdge, "writes"),
+        (ModelsEdge, "models"),
+        (ReferencesEdge, "references"),
+        (SoftReferenceEdge, "soft_reference"),
+        (DependsOnEdge, "depends_on"),
     ])
-    def test_edge_type_and_relation_type(self, edge_cls, expected_edge_type, expected_relation_type):
+    def test_edge_type(self, edge_cls, expected_edge_type):
         edge = edge_cls.create(ORG_ID, FROM_URN, TO_URN)
         assert edge.edge_type == expected_edge_type
-        assert edge.relation_type == expected_relation_type
 
 
 class TestEdgeCreateDeterministicUUID:

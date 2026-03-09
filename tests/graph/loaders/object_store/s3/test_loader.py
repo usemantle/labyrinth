@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.graph.graph_models import NodeMetadataKey, RelationType
+from src.graph.graph_models import NodeMetadataKey
 from src.graph.loaders.object_store.s3.loader import S3BucketLoader
 from src.graph.loaders.object_store.s3.wildcard import (
     collapse_key,
@@ -210,7 +210,7 @@ class TestS3BucketLoaderCollapsing:
 
     def test_all_edges_are_contains(self):
         for edge in self.edges:
-            assert edge.relation_type == RelationType.CONTAINS
+            assert edge.edge_type == "contains"
 
 
 class TestS3BucketLoaderEmpty:

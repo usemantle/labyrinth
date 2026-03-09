@@ -59,7 +59,7 @@ def _serialize_node(node: Node) -> dict:
 
 
 def _serialize_edge(edge: Edge) -> dict:
-    edge_type = edge.edge_type if edge.edge_type else edge.relation_type.value
+    edge_type = edge.edge_type
     return {
         "uuid": str(edge.uuid),
         "organization_id": str(edge.organization_id),

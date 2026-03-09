@@ -8,7 +8,6 @@ from src.graph.graph_models import (
     Node,
     NodeMetadata,
     NodeMetadataKey,
-    RelationType,
 )
 from src.graph.loaders.codebase.codebase_loader import PostProcessContext
 from src.graph.loaders.codebase.plugins.python_dependency_linker import (
@@ -204,7 +203,7 @@ class TestPythonDependencyLinkerPlugin:
         ctx = _make_context({"src/api.py": "import requests\n\ndef fetch():\n    pass\n"})
 
         _, new_edges = plugin.post_process(nodes, [], ctx)
-        depends_on = [e for e in new_edges if e.relation_type == RelationType.DEPENDS_ON]
+        depends_on = [e for e in new_edges if e.edge_type == "depends_on"]
         assert len(depends_on) == 1
         assert str(depends_on[0].from_urn) == str(file_node.urn)
         assert str(depends_on[0].to_urn) == str(dep_node.urn)
@@ -217,7 +216,7 @@ class TestPythonDependencyLinkerPlugin:
         ctx = _make_context({"src/api.py": "import os\nimport sys\n"})
 
         _, new_edges = plugin.post_process(nodes, [], ctx)
-        depends_on = [e for e in new_edges if e.relation_type == RelationType.DEPENDS_ON]
+        depends_on = [e for e in new_edges if e.edge_type == "depends_on"]
         assert len(depends_on) == 0
 
     def test_multiple_files_same_dependency(self):
@@ -232,7 +231,7 @@ class TestPythonDependencyLinkerPlugin:
         })
 
         _, new_edges = plugin.post_process(nodes, [], ctx)
-        depends_on = [e for e in new_edges if e.relation_type == RelationType.DEPENDS_ON]
+        depends_on = [e for e in new_edges if e.edge_type == "depends_on"]
         assert len(depends_on) == 2
 
     def test_no_dependency_nodes_no_crash(self):
@@ -251,7 +250,7 @@ class TestPythonDependencyLinkerPlugin:
         ctx = _make_context({"src/api.py": "import requests\n"})
 
         _, new_edges = plugin.post_process(nodes, [], ctx)
-        depends_on = [e for e in new_edges if e.relation_type == RelationType.DEPENDS_ON]
+        depends_on = [e for e in new_edges if e.edge_type == "depends_on"]
         assert depends_on[0].metadata["import_name"] == "requests"
 
     def test_from_import_detected(self):
@@ -262,7 +261,7 @@ class TestPythonDependencyLinkerPlugin:
         ctx = _make_context({"src/app.py": "from flask import Flask\n"})
 
         _, new_edges = plugin.post_process(nodes, [], ctx)
-        depends_on = [e for e in new_edges if e.relation_type == RelationType.DEPENDS_ON]
+        depends_on = [e for e in new_edges if e.edge_type == "depends_on"]
         assert len(depends_on) == 1
 
     def test_venv_discovery_resolves_mismatch(self, tmp_path):
@@ -283,5 +282,5 @@ class TestPythonDependencyLinkerPlugin:
         )
 
         _, new_edges = plugin.post_process(nodes, [], ctx)
-        depends_on = [e for e in new_edges if e.relation_type == RelationType.DEPENDS_ON]
+        depends_on = [e for e in new_edges if e.edge_type == "depends_on"]
         assert len(depends_on) == 1

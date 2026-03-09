@@ -5,14 +5,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata, RelationType
+from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata
 
 
 @dataclass
 class ModelsEdge(Edge):
     """An ORM class modeling a data resource (e.g., SQLAlchemy model -> table)."""
 
-    relation_type: RelationType = RelationType.CODE_TO_DATA
     edge_type: str = "models"
 
     @classmethod

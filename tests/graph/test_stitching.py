@@ -13,7 +13,6 @@ from src.graph.graph_models import (
     Node,
     NodeMetadata,
     NodeMetadataKey,
-    RelationType,
 )
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 from src.graph.loaders.codebase.plugins import SQLAlchemyPlugin
@@ -61,7 +60,7 @@ def _make_orm_repo(tmp_path):
 
 def _make_data_nodes():
     """Create fake database nodes mimicking OnPremPostgresLoader output."""
-    from src.graph.loaders._helpers import make_edge
+    from src.graph.edges.contains_edge import ContainsEdge
 
     db_urn = URN("urn:onprem:postgres:localhost:5432:mydb")
     schema_urn = URN("urn:onprem:postgres:localhost:5432:mydb/public")
@@ -75,9 +74,9 @@ def _make_data_nodes():
         Node(organization_id=ORG_ID, urn=orders_urn, parent_urn=schema_urn, metadata=NodeMetadata({NK.TABLE_NAME: "orders"})),
     ]
     edges = [
-        make_edge(ORG_ID, db_urn, schema_urn, RelationType.CONTAINS),
-        make_edge(ORG_ID, schema_urn, users_urn, RelationType.CONTAINS),
-        make_edge(ORG_ID, schema_urn, orders_urn, RelationType.CONTAINS),
+        ContainsEdge.create(ORG_ID, db_urn, schema_urn),
+        ContainsEdge.create(ORG_ID, schema_urn, users_urn),
+        ContainsEdge.create(ORG_ID, schema_urn, orders_urn),
     ]
     return nodes, edges
 
@@ -100,7 +99,7 @@ def test_stitch_orm_class_to_table(tmp_path):
         code_base_paths=[str(repo)],
     )
 
-    c2d = [e for e in all_edges if e.relation_type == RelationType.CODE_TO_DATA]
+    c2d = [e for e in all_edges if e.edge_type in ("models", "reads", "writes")]
     orm_edges = [e for e in c2d if e.metadata.get(EK.DETECTION_METHOD) == "orm_tablename"]
 
     # User → users, Order → orders
@@ -125,7 +124,7 @@ def test_stitch_function_to_table(tmp_path):
         code_base_paths=[str(repo)],
     )
 
-    c2d = [e for e in all_edges if e.relation_type == RelationType.CODE_TO_DATA]
+    c2d = [e for e in all_edges if e.edge_type in ("models", "reads", "writes")]
     func_edges = [e for e in c2d if e.metadata.get(EK.DETECTION_METHOD) == "orm_reference"]
 
     # create_user references User → links to users table
@@ -155,7 +154,7 @@ def test_stitch_no_data_nodes(tmp_path):
         code_base_paths=[str(repo)],
     )
 
-    c2d = [e for e in all_edges if e.relation_type == RelationType.CODE_TO_DATA]
+    c2d = [e for e in all_edges if e.edge_type in ("models", "reads", "writes")]
     assert len(c2d) == 0
 
 
@@ -174,7 +173,7 @@ def test_stitch_no_orm_models(tmp_path):
         code_base_paths=[str(repo)],
     )
 
-    c2d = [e for e in all_edges if e.relation_type == RelationType.CODE_TO_DATA]
+    c2d = [e for e in all_edges if e.edge_type in ("models", "reads", "writes")]
     assert len(c2d) == 0
 
 
@@ -193,7 +192,7 @@ def test_stitch_edge_metadata(tmp_path):
         code_base_paths=[str(repo)],
     )
 
-    c2d = [e for e in all_edges if e.relation_type == RelationType.CODE_TO_DATA]
+    c2d = [e for e in all_edges if e.edge_type in ("models", "reads", "writes")]
     for edge in c2d:
         assert EK.DETECTION_METHOD in edge.metadata
         assert EK.CONFIDENCE in edge.metadata

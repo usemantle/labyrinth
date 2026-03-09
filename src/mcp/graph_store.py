@@ -20,7 +20,7 @@ class GraphStore:
         self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self.tables_by_name: dict[str, str] = {}         # table_name -> urn
         self.nodes_by_type: dict[str, list[str]] = {}     # node_type -> [urn, ...]
-        self.edges_by_type: dict[str, list[tuple[str, str, str]]] = {}  # relation_type -> [(from, to, key), ...]
+        self.edges_by_type: dict[str, list[tuple[str, str, str]]] = {}  # edge_type -> [(from, to, key), ...]
         self.soft_links: list[dict] = []
         self.generated_at = "unknown"
         self._load(json_path)
@@ -54,7 +54,7 @@ class GraphStore:
 
         for edge in data["edges"]:
             key = edge["uuid"]
-            edge_type = edge.get("edge_type") or edge.get("relation_type", "UNKNOWN")
+            edge_type = edge.get("edge_type", "UNKNOWN")
             self.G.add_edge(
                 edge["from_urn"],
                 edge["to_urn"],
@@ -92,7 +92,7 @@ class GraphStore:
                 logger.warning("Soft link skipped — to_urn not in graph: %s", to_urn)
                 continue
 
-            edge_type = link.get("edge_type") or link.get("relation_type", "reads")
+            edge_type = link.get("edge_type", "reads")
             edge_key = str(uuid.uuid5(
                 EDGE_NAMESPACE, f"{from_urn}:{to_urn}:{edge_type}"
             ))

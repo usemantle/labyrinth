@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from mcp.server.fastmcp import FastMCP
 
-from src.graph.graph_models import NodeMetadataKey, RelationType
+from src.graph.graph_models import NodeMetadataKey
 from src.graph.loaders.codebase.cve.osv_client import OsvResult
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 from src.graph.loaders.codebase.plugins import UvPlugin
@@ -127,7 +127,7 @@ def test_contains_edges(mock_osv, tmp_path):
     req = _find_dep(nodes, "requests")
     contains_edges = [
         e for e in edges
-        if e.relation_type == RelationType.CONTAINS
+        if e.edge_type == "contains"
         and e.to_urn == req.urn
     ]
     assert len(contains_edges) == 1
@@ -203,7 +203,7 @@ def test_transitive_depends_on_edges(mock_osv, tmp_path):
     ecdsa = _find_dep(nodes, "ecdsa")
     assert jose and crypto and ecdsa
 
-    dep_edges = [e for e in edges if e.relation_type == RelationType.DEPENDS_ON]
+    dep_edges = [e for e in edges if e.edge_type == "depends_on"]
     # python-jose → cryptography
     assert any(e.from_urn == jose.urn and e.to_urn == crypto.urn for e in dep_edges)
     # python-jose → ecdsa
@@ -222,7 +222,7 @@ def test_transitive_chain_depth(mock_osv, tmp_path):
     urllib3 = _find_dep(nodes, "urllib3")
     assert app and requests and urllib3
 
-    dep_edges = [e for e in edges if e.relation_type == RelationType.DEPENDS_ON]
+    dep_edges = [e for e in edges if e.edge_type == "depends_on"]
     # my-app → requests
     assert any(e.from_urn == app.urn and e.to_urn == requests.urn for e in dep_edges)
     # requests → urllib3
@@ -236,7 +236,7 @@ def test_no_transitive_edges_without_dependencies(mock_osv, tmp_path):
     repo = _make_repo(tmp_path, lock_content=LOCK_CONTENT)
     nodes, edges = _load(repo)
 
-    dep_edges = [e for e in edges if e.relation_type == RelationType.DEPENDS_ON]
+    dep_edges = [e for e in edges if e.edge_type == "depends_on"]
     assert dep_edges == []
 
 
@@ -277,7 +277,7 @@ def test_transitive_cve_reachable_via_blast_radius(mock_osv, tmp_path):
                 "organization_id": str(e.organization_id),
                 "from_urn": str(e.from_urn),
                 "to_urn": str(e.to_urn),
-                "edge_type": e.edge_type or e.relation_type.value,
+                "edge_type": e.edge_type,
                 "metadata": dict(e.metadata.items()),
             }
             for e in edges

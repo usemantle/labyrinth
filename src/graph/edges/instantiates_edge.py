@@ -5,14 +5,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata, RelationType
+from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata
 
 
 @dataclass
 class InstantiatesEdge(Edge):
     """A function instantiating a class."""
 
-    relation_type: RelationType = RelationType.CODE_TO_CODE
     edge_type: str = "instantiates"
 
     @classmethod

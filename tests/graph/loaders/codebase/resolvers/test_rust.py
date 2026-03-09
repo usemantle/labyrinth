@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from src.graph.graph_models import NodeMetadataKey, RelationType
+from src.graph.graph_models import NodeMetadataKey
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
@@ -98,14 +98,14 @@ def _find_node(nodes, **metadata_match):
     pytest.fail(f"No node found with metadata: {keys}")
 
 
-def _find_edges(edges, from_urn=None, to_urn=None, relation_type=None):
+def _find_edges(edges, from_urn=None, to_urn=None, edge_type=None):
     result = []
     for edge in edges:
         if from_urn and str(edge.from_urn) != str(from_urn):
             continue
         if to_urn and str(edge.to_urn) != str(to_urn):
             continue
-        if relation_type and edge.relation_type != relation_type:
+        if edge_type and edge.edge_type != edge_type:
             continue
         result.append(edge)
     return result
@@ -157,7 +157,7 @@ def test_rust_cross_file_call(rust_result):
         edges,
         from_urn=caller.urn,
         to_urn=callee.urn,
-        relation_type=RelationType.CODE_TO_CODE,
+        edge_type="calls",
     )
     assert len(code_to_code) == 1, (
         f"Expected 1 CODE_TO_CODE edge from handle_request -> get_user_by_id, "
@@ -177,7 +177,7 @@ def test_rust_same_file_call(rust_result):
         edges,
         from_urn=caller.urn,
         to_urn=callee.urn,
-        relation_type=RelationType.CODE_TO_CODE,
+        edge_type="calls",
     )
     assert len(code_to_code) == 1, (
         f"Expected 1 CODE_TO_CODE edge from handle_request -> format_response, "
@@ -216,7 +216,7 @@ def test_rust_same_file_call_inside_macro(tmp_path):
         edges,
         from_urn=caller.urn,
         to_urn=callee.urn,
-        relation_type=RelationType.CODE_TO_CODE,
+        edge_type="calls",
     )
     assert len(code_to_code) == 1, (
         f"Expected 1 CODE_TO_CODE edge from vault_path -> is_safe_vault_name, "
@@ -308,11 +308,11 @@ def test_rust_grouped_import(tmp_path):
 
     alpha_edges = _find_edges(
         edges, from_urn=caller.urn, to_urn=alpha.urn,
-        relation_type=RelationType.CODE_TO_CODE,
+        edge_type="calls",
     )
     beta_edges = _find_edges(
         edges, from_urn=caller.urn, to_urn=beta.urn,
-        relation_type=RelationType.CODE_TO_CODE,
+        edge_type="calls",
     )
     assert len(alpha_edges) == 1
     assert len(beta_edges) == 1
@@ -341,7 +341,7 @@ def test_rust_aliased_import(tmp_path):
 
     code_to_code = _find_edges(
         edges, from_urn=caller.urn, to_urn=callee.urn,
-        relation_type=RelationType.CODE_TO_CODE,
+        edge_type="calls",
     )
     assert len(code_to_code) == 1
 
@@ -364,7 +364,7 @@ def test_rust_external_import_no_edge(tmp_path):
     loader = FileSystemCodebaseLoader(organization_id=ORG_ID)
     _, edges = loader.load(str(root))
 
-    code_to_code = [e for e in edges if e.relation_type == RelationType.CODE_TO_CODE]
+    code_to_code = [e for e in edges if e.edge_type == "calls"]
     assert len(code_to_code) == 0
 
 
@@ -440,7 +440,7 @@ def test_rust_qualified_path_call(tmp_path):
         edges,
         from_urn=caller.urn,
         to_urn=callee.urn,
-        relation_type=RelationType.CODE_TO_CODE,
+        edge_type="calls",
     )
     assert len(code_to_code) == 1
 
@@ -480,7 +480,7 @@ def test_rust_qualified_path_to_impl_method(tmp_path):
         edges,
         from_urn=caller.urn,
         to_urn=callee.urn,
-        relation_type=RelationType.CODE_TO_CODE,
+        edge_type="calls",
     )
     assert len(code_to_code) == 1
 
@@ -512,6 +512,6 @@ def test_rust_bare_module_path_call(tmp_path):
         edges,
         from_urn=caller.urn,
         to_urn=callee.urn,
-        relation_type=RelationType.CODE_TO_CODE,
+        edge_type="calls",
     )
     assert len(code_to_code) == 1

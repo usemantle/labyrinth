@@ -11,7 +11,6 @@ import uuid
 from src.graph.graph_models import (
     EdgeMetadataKey,
     NodeMetadataKey,
-    RelationType,
 )
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 from src.graph.loaders.codebase.plugins import SQLAlchemyPlugin
@@ -292,7 +291,7 @@ def test_sqlalchemy_function_links_to_orm_class(tmp_path):
 
     assert func.metadata[NK.ORM_MODELS] == "User"
 
-    c2c = [e for e in edges if e.relation_type == RelationType.CODE_TO_CODE
+    c2c = [e for e in edges if e.edge_type in ("calls", "instantiates")
            and e.from_urn == func.urn and e.to_urn == user_cls.urn]
     assert len(c2c) == 1
     assert c2c[0].metadata[EK.DETECTION_METHOD] == "orm_model_reference"
@@ -327,7 +326,7 @@ def test_sqlalchemy_function_links_to_multiple_models(tmp_path):
     func = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "get_user_orders")
     assert func.metadata[NK.ORM_MODELS] == "Order,User"
 
-    c2c = [e for e in edges if e.relation_type == RelationType.CODE_TO_CODE
+    c2c = [e for e in edges if e.edge_type in ("calls", "instantiates")
            and e.from_urn == func.urn]
     assert len(c2c) == 2
     linked_classes = {e.metadata[EK.ORM_CLASS] for e in c2c}
@@ -355,7 +354,7 @@ def test_sqlalchemy_no_edge_when_no_class_reference(tmp_path):
     func = next(n for n in nodes if n.metadata.get(NK.FUNCTION_NAME) == "do_commit")
     assert NK.ORM_MODELS not in func.metadata
 
-    c2c = [e for e in edges if e.relation_type == RelationType.CODE_TO_CODE
+    c2c = [e for e in edges if e.edge_type in ("calls", "instantiates")
            and e.from_urn == func.urn]
     assert len(c2c) == 0
 
@@ -382,6 +381,6 @@ def test_sqlalchemy_no_scan_without_orm_operations(tmp_path):
     assert NK.ORM_MODELS not in func.metadata
     assert NK.ORM_OPERATIONS not in func.metadata
 
-    c2c = [e for e in edges if e.relation_type == RelationType.CODE_TO_CODE
+    c2c = [e for e in edges if e.edge_type in ("calls", "instantiates")
            and e.from_urn == func.urn]
     assert len(c2c) == 0

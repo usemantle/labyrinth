@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from src.graph.graph_models import NodeMetadataKey, RelationType
+from src.graph.graph_models import NodeMetadataKey
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 from src.graph.loaders.codebase.plugins.fastapi_plugin import FastAPIPlugin
 
@@ -101,7 +101,7 @@ def _find_node(nodes, **metadata_match):
     pytest.fail(f"No node found with metadata: {keys}")
 
 
-def _find_edges(edges, from_urn=None, to_urn=None, relation_type=None):
+def _find_edges(edges, from_urn=None, to_urn=None, edge_type=None):
     """Find edges matching the given criteria."""
     result = []
     for edge in edges:
@@ -109,7 +109,7 @@ def _find_edges(edges, from_urn=None, to_urn=None, relation_type=None):
             continue
         if to_urn and str(edge.to_urn) != str(to_urn):
             continue
-        if relation_type and edge.relation_type != relation_type:
+        if edge_type and edge.edge_type != edge_type:
             continue
         result.append(edge)
     return result
@@ -130,7 +130,7 @@ def test_cross_file_function_call(graph_result):
         edges,
         from_urn=caller.urn,
         to_urn=callee.urn,
-        relation_type=RelationType.CODE_TO_CODE,
+        edge_type="calls",
     )
     assert len(code_to_code) == 1, (
         f"Expected 1 CODE_TO_CODE edge from get_user -> get_user_by_id, "
@@ -151,7 +151,7 @@ def test_same_file_function_call(graph_result):
         edges,
         from_urn=caller.urn,
         to_urn=callee.urn,
-        relation_type=RelationType.CODE_TO_CODE,
+        edge_type="calls",
     )
     assert len(code_to_code) == 1, (
         f"Expected 1 CODE_TO_CODE edge from get_user -> format_response, "
@@ -187,7 +187,7 @@ def test_python_same_file_call_in_assertion(tmp_path):
         edges,
         from_urn=caller.urn,
         to_urn=callee.urn,
-        relation_type=RelationType.CODE_TO_CODE,
+        edge_type="calls",
     )
     assert len(code_to_code) == 1, (
         f"Expected 1 CODE_TO_CODE edge from vault_path -> is_safe_name, "

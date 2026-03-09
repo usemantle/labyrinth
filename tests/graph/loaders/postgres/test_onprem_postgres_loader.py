@@ -15,7 +15,6 @@ from src.drivers.sql.models import (
     SchemaMetadata,
     TableMetadata,
 )
-from src.graph.graph_models import RelationType
 from src.graph.loaders.postgres.onprem_postgres_loader import OnPremPostgresLoader
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
@@ -175,8 +174,8 @@ def test_ordinal_position(loader_result):
 
 def test_edge_counts(loader_result):
     _, edges = loader_result
-    contains = [e for e in edges if e.relation_type == RelationType.CONTAINS]
-    fk = [e for e in edges if e.relation_type == RelationType.DATA_TO_DATA]
+    contains = [e for e in edges if e.edge_type == "contains"]
+    fk = [e for e in edges if e.edge_type == "references"]
     # CONTAINS: 1 db→schema + 2 schema→table + 5 table→column = 8
     assert len(contains) == 8
     # DATA_TO_DATA: 1 FK
@@ -187,7 +186,7 @@ def test_contains_db_to_schema(loader_result):
     _, edges = loader_result
     db_to_schema = [
         e for e in edges
-        if e.relation_type == RelationType.CONTAINS
+        if e.edge_type == "contains"
         and "mydb" == e.from_urn.path
     ]
     assert len(db_to_schema) == 1
@@ -196,7 +195,7 @@ def test_contains_db_to_schema(loader_result):
 
 def test_fk_edge(loader_result):
     _, edges = loader_result
-    fk = [e for e in edges if e.relation_type == RelationType.DATA_TO_DATA]
+    fk = [e for e in edges if e.edge_type == "references"]
     assert len(fk) == 1
     edge = fk[0]
     assert edge.from_urn.path == "mydb/public/orders/user_id"

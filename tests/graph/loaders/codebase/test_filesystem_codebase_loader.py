@@ -12,7 +12,6 @@ import pytest
 from src.graph.graph_models import (
     EdgeMetadataKey,
     NodeMetadataKey,
-    RelationType,
 )
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 
@@ -213,7 +212,7 @@ def test_fs_nested_method(fs_result):
 
 def test_fs_contains_edge_counts(fs_result):
     _, edges = fs_result
-    contains = [e for e in edges if e.relation_type == RelationType.CONTAINS]
+    contains = [e for e in edges if e.edge_type == "contains"]
     # Every node except root has a CONTAINS edge pointing to it
     assert len(contains) == len([n for n, _ in [(None, None)]] * 0) or len(contains) > 0
     # More specifically: edges = nodes - 1 (root has no incoming edge)
@@ -225,7 +224,7 @@ def test_fs_all_edges_are_contains(fs_result):
     """Phase 1: only CONTAINS edges, no CODE_TO_DATA yet."""
     _, edges = fs_result
     for edge in edges:
-        assert edge.relation_type == RelationType.CONTAINS
+        assert edge.edge_type == "contains"
 
 
 def test_fs_parent_urn_file_to_root(fs_result):

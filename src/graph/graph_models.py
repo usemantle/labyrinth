@@ -6,41 +6,6 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 
-class RelationType(str, enum.Enum):
-    """
-    The type of relationship an edge represents.
-
-    CONTAINS: Structural containment between parent and child resources.
-        e.g., database → schema, schema → table, table → column,
-              s3-bucket → s3-prefix, github-repo → file
-
-    HOSTS: Infrastructure resource that runs/hosts a data resource.
-        e.g., rds-cluster → database, ec2-instance → self-hosted-postgres,
-              cloud-sql-instance → database
-
-    DATA_TO_DATA: Leaf data resource to leaf data resource.
-        e.g., orders.customer_id → customers.id (foreign key),
-              attachments.s3_uri → s3://user-uploads/ (AI-inferred)
-
-    CODE_TO_DATA: Code function to leaf data resource.
-        e.g., upload_service.store_attachment() → attachments.s3_uri
-
-    CODE_TO_CODE: Code function to code function.
-        e.g., create_datastore() → GraphTraversalService()
-
-    PRINCIPAL_TO_DATA: IAM principal to container-level resource.
-        e.g., arn:aws:iam::role/api-service → arn:aws:dynamodb::orders
-    """
-
-    CONTAINS = "CONTAINS"
-    HOSTS = "HOSTS"
-    DATA_TO_DATA = "DATA_TO_DATA"
-    CODE_TO_DATA = "CODE_TO_DATA"
-    CODE_TO_CODE = "CODE_TO_CODE"
-    DEPENDS_ON = "DEPENDS_ON"
-    PRINCIPAL_TO_DATA = "PRINCIPAL_TO_DATA"
-
-
 class NodeMetadataKey(str, enum.Enum):
     """Valid keys for Node metadata dictionaries."""
 
@@ -337,22 +302,14 @@ class Edge:
     """
     A directed relationship between two nodes in the security graph.
 
-    Edges are typed by RelationType which controls traversal semantics:
-    - CONTAINS edges are traversed for structural/hierarchy queries.
-    - HOSTS edges link infrastructure to the data resources they run.
-    - DATA_TO_DATA edges are traversed for data flow queries.
-    - CODE_TO_DATA edges are traversed for code impact analysis.
-    - CODE_TO_CODE edges are traversed for call graph analysis.
-    - PRINCIPAL_TO_DATA edges are traversed for permission queries.
-
-    The metadata field carries provenance, confidence, evidence, and
-    verification state.
+    The edge_type field carries all semantic meaning (e.g. "contains",
+    "reads", "writes", "calls"). The metadata field carries provenance,
+    confidence, evidence, and verification state.
     """
 
     uuid: uuid.UUID
     organization_id: uuid.UUID
     from_urn: URN
     to_urn: URN
-    relation_type: RelationType
     metadata: EdgeMetadata = field(default_factory=EdgeMetadata)
-    edge_type: str | None = None
+    edge_type: str = "unknown"
