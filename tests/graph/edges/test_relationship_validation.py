@@ -7,6 +7,7 @@ from src.graph.edges import (
     ContainsEdge,
     DependsOnEdge,
     HostsEdge,
+    InstantiatesEdge,
     ModelsEdge,
     ReadsEdge,
     ReferencesEdge,
@@ -161,6 +162,18 @@ class TestValidEdges:
         edge = ContainsEdge.create(ORG_ID, cb.urn, dep.urn)
         assert validate_edge(edge, cb, dep) == []
 
+    def test_function_instantiates_class(self):
+        fn = FunctionNode.create(ORG_ID, _urn("r/f.py/fn"), _urn("r/f.py"), function_name="fn", start_line=1, end_line=5)
+        c = ClassNode.create(ORG_ID, _urn("r/f.py/C"), _urn("r/f.py"), class_name="C", start_line=10, end_line=50)
+        edge = InstantiatesEdge.create(ORG_ID, fn.urn, c.urn)
+        assert validate_edge(edge, fn, c) == []
+
+    def test_file_depends_on_dependency(self):
+        f = FileNode.create(ORG_ID, _urn("r/f.py"), _urn("r"), file_path="f.py")
+        dep = DependencyNode.create(ORG_ID, _urn("dep/requests"), package_name="requests")
+        edge = DependsOnEdge.create(ORG_ID, f.urn, dep.urn)
+        assert validate_edge(edge, f, dep) == []
+
 
 class TestInvalidEdges:
     """Invalid edge-node combinations must produce violations."""
@@ -209,6 +222,13 @@ class TestInvalidEdges:
         edge = CallsEdge.create(ORG_ID, fn.urn, b.urn)
         violations = validate_edge(edge, fn, b)
         assert any("BucketNode" in v for v in violations)
+
+    def test_class_cannot_send_instantiates(self):
+        c = ClassNode.create(ORG_ID, _urn("r/f.py/C"), _urn("r/f.py"), class_name="C", start_line=1, end_line=50)
+        c2 = ClassNode.create(ORG_ID, _urn("r/f.py/D"), _urn("r/f.py"), class_name="D", start_line=55, end_line=100)
+        edge = InstantiatesEdge.create(ORG_ID, c.urn, c2.urn)
+        violations = validate_edge(edge, c, c2)
+        assert len(violations) > 0
 
 
 class TestBackwardCompat:

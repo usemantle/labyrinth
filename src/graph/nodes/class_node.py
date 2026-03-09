@@ -8,6 +8,7 @@ from typing import ClassVar
 
 from src.graph.edges.calls_edge import CallsEdge
 from src.graph.edges.contains_edge import ContainsEdge
+from src.graph.edges.instantiates_edge import InstantiatesEdge
 from src.graph.edges.models_edge import ModelsEdge
 from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
 
@@ -27,6 +28,7 @@ class ClassNode(Node):
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,
         CallsEdge,
+        InstantiatesEdge,
     })
 
     @classmethod

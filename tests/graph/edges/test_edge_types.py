@@ -9,6 +9,7 @@ from src.graph.edges import (
     ContainsEdge,
     DependsOnEdge,
     HostsEdge,
+    InstantiatesEdge,
     ModelsEdge,
     ReadsEdge,
     ReferencesEdge,
@@ -26,7 +27,7 @@ class TestEdgeSubclassIsEdge:
     """Every typed edge must be an instance of Edge."""
 
     @pytest.mark.parametrize("edge_cls", [
-        ContainsEdge, HostsEdge, CallsEdge,
+        ContainsEdge, HostsEdge, CallsEdge, InstantiatesEdge,
         ReadsEdge, WritesEdge, ModelsEdge,
         ReferencesEdge, SoftReferenceEdge, DependsOnEdge,
     ])
@@ -41,6 +42,7 @@ class TestEdgeTypeAndRelationType:
         (ContainsEdge, "contains", RelationType.CONTAINS),
         (HostsEdge, "hosts", RelationType.HOSTS),
         (CallsEdge, "calls", RelationType.CODE_TO_CODE),
+        (InstantiatesEdge, "instantiates", RelationType.CODE_TO_CODE),
         (ReadsEdge, "reads", RelationType.CODE_TO_DATA),
         (WritesEdge, "writes", RelationType.CODE_TO_DATA),
         (ModelsEdge, "models", RelationType.CODE_TO_DATA),
@@ -58,7 +60,7 @@ class TestEdgeCreateDeterministicUUID:
     """Edge create() must produce deterministic UUIDs."""
 
     @pytest.mark.parametrize("edge_cls", [
-        ContainsEdge, HostsEdge, CallsEdge,
+        ContainsEdge, HostsEdge, CallsEdge, InstantiatesEdge,
         ReadsEdge, WritesEdge, ModelsEdge,
         ReferencesEdge, SoftReferenceEdge, DependsOnEdge,
     ])
@@ -68,7 +70,7 @@ class TestEdgeCreateDeterministicUUID:
         assert e1.uuid == e2.uuid
 
     @pytest.mark.parametrize("edge_cls", [
-        ContainsEdge, HostsEdge, CallsEdge,
+        ContainsEdge, HostsEdge, CallsEdge, InstantiatesEdge,
         ReadsEdge, WritesEdge, ModelsEdge,
         ReferencesEdge, SoftReferenceEdge, DependsOnEdge,
     ])
@@ -118,6 +120,11 @@ class TestDistinctEdgeTypesProduceDifferentUUIDs:
         ref = ReferencesEdge.create(ORG_ID, FROM_URN, TO_URN)
         soft = SoftReferenceEdge.create(ORG_ID, FROM_URN, TO_URN)
         assert ref.uuid != soft.uuid
+
+    def test_calls_vs_instantiates(self):
+        c = CallsEdge.create(ORG_ID, FROM_URN, TO_URN)
+        i = InstantiatesEdge.create(ORG_ID, FROM_URN, TO_URN)
+        assert c.uuid != i.uuid
 
 
 class TestEdgesWorkInListOfEdge:

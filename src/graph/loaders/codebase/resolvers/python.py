@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from ast_grep_py import SgRoot
 
 from src.graph.edges.calls_edge import CallsEdge
+from src.graph.edges.instantiates_edge import InstantiatesEdge
 from src.graph.graph_models import (
     Edge,
     EdgeMetadataKey,
@@ -53,6 +54,12 @@ class PythonAnalyzer(LanguageAnalyzer):
         # Build lookup: rel_path → [function nodes in that file]
         funcs_by_file = _build_funcs_by_file(nodes)
 
+        # Build lookup: (rel_path, class_name) → Node
+        class_index = _build_class_index(nodes)
+
+        # Build lookup: rel_path → [class nodes in that file]
+        classes_by_file = _build_classes_by_file(nodes)
+
         new_edges: list[Edge] = []
         for node in nodes:
             if NodeMetadataKey.FUNCTION_NAME not in node.metadata:
@@ -73,18 +80,29 @@ class PythonAnalyzer(LanguageAnalyzer):
                 for n in funcs_by_file.get(rel_path, [])
                 if n is not node
             }
+            same_file_classes = {
+                n.metadata[NodeMetadataKey.CLASS_NAME]
+                for n in classes_by_file.get(rel_path, [])
+            }
 
             for call in calls:
                 target = _resolve_call_target(
                     call, file_imports, same_file_funcs,
                     func_index, rel_path,
+                    class_index, same_file_classes,
                 )
                 if target is None:
                     continue
-                edge = CallsEdge.create(
-                    context.organization_id,
-                    node.urn, target.urn,
-                )
+                if call.call_type == "class_instantiation":
+                    edge = InstantiatesEdge.create(
+                        context.organization_id,
+                        node.urn, target.urn,
+                    )
+                else:
+                    edge = CallsEdge.create(
+                        context.organization_id,
+                        node.urn, target.urn,
+                    )
                 edge.metadata[EdgeMetadataKey.CALL_TYPE] = call.call_type
                 new_edges.append(edge)
 
@@ -219,6 +237,31 @@ def _build_funcs_by_file(nodes: list[Node]) -> dict[str, list[Node]]:
     return by_file
 
 
+def _build_class_index(nodes: list[Node]) -> dict[tuple[str, str], Node]:
+    """Build (rel_path, class_name) → Node lookup."""
+    index: dict[tuple[str, str], Node] = {}
+    for node in nodes:
+        if NodeMetadataKey.CLASS_NAME not in node.metadata:
+            continue
+        rel_path = node.metadata.get(NodeMetadataKey.FILE_PATH)
+        class_name = node.metadata[NodeMetadataKey.CLASS_NAME]
+        if rel_path:
+            index[(rel_path, class_name)] = node
+    return index
+
+
+def _build_classes_by_file(nodes: list[Node]) -> dict[str, list[Node]]:
+    """Build rel_path → [class nodes] lookup."""
+    by_file: dict[str, list[Node]] = {}
+    for node in nodes:
+        if NodeMetadataKey.CLASS_NAME not in node.metadata:
+            continue
+        rel_path = node.metadata.get(NodeMetadataKey.FILE_PATH)
+        if rel_path:
+            by_file.setdefault(rel_path, []).append(node)
+    return by_file
+
+
 def _get_function_source(node: Node, file_source: str) -> str | None:
     """Extract a function's source text from its file using line numbers."""
     start = node.metadata.get(NodeMetadataKey.START_LINE)
@@ -236,8 +279,10 @@ def _resolve_call_target(
     same_file_funcs: set[str],
     func_index: dict[tuple[str, str], Node],
     current_file: str,
+    class_index: dict[tuple[str, str], Node],
+    same_file_classes: set[str],
 ) -> Node | None:
-    """Resolve a call site to a target function Node."""
+    """Resolve a call site to a target function or class Node."""
     name = call.callee_name
 
     # 1. Check imports (cross-file)
@@ -248,10 +293,18 @@ def _resolve_call_target(
         target = func_index.get((imp.source_file, imp.source_name))
         if target:
             return target
+        target = class_index.get((imp.source_file, imp.source_name))
+        if target:
+            return target
 
     # 2. Check same-file definitions
     if name in same_file_funcs:
         target = func_index.get((current_file, name))
+        if target:
+            return target
+
+    if name in same_file_classes:
+        target = class_index.get((current_file, name))
         if target:
             return target
 

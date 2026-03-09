@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from src.graph.graph_models import RelationType
+from src.graph.graph_models import NodeMetadataKey, RelationType
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 from src.graph.loaders.codebase.plugins.fastapi_plugin import FastAPIPlugin
 
@@ -192,4 +192,77 @@ def test_python_same_file_call_in_assertion(tmp_path):
     assert len(code_to_code) == 1, (
         f"Expected 1 CODE_TO_CODE edge from vault_path -> is_safe_name, "
         f"found {len(code_to_code)}"
+    )
+
+
+# ── Tests: Class instantiation (InstantiatesEdge) ────────────────────
+
+
+def test_cross_file_class_instantiation(tmp_path):
+    """A function that imports and instantiates a class from another file
+    should produce an InstantiatesEdge."""
+    root = tmp_path / "myapp"
+    root.mkdir()
+    (root / "__init__.py").write_text("")
+    (root / "models.py").write_text(
+        "class User:\n"
+        "    def __init__(self, name: str):\n"
+        "        self.name = name\n"
+    )
+    (root / "service.py").write_text(
+        "from myapp.models import User\n"
+        "\n"
+        "def create_user(name: str):\n"
+        "    return User(name)\n"
+    )
+
+    loader = FileSystemCodebaseLoader(organization_id=ORG_ID)
+    nodes, edges = loader.load(str(root))
+
+    caller = _find_node(nodes, function_name="create_user")
+    target_class = _find_node(nodes, class_name="User")
+
+    instantiates = [
+        e for e in edges
+        if str(e.from_urn) == str(caller.urn)
+        and str(e.to_urn) == str(target_class.urn)
+        and e.edge_type == "instantiates"
+    ]
+    assert len(instantiates) == 1, (
+        f"Expected 1 instantiates edge from create_user -> User, "
+        f"found {len(instantiates)}"
+    )
+    assert instantiates[0].metadata.get("call_type") == "class_instantiation"
+
+
+def test_same_file_class_instantiation(tmp_path):
+    """A function that instantiates a class defined in the same file
+    should produce an InstantiatesEdge."""
+    root = tmp_path / "myapp"
+    root.mkdir()
+    (root / "__init__.py").write_text("")
+    (root / "service.py").write_text(
+        "class Config:\n"
+        "    def __init__(self):\n"
+        "        self.debug = False\n"
+        "\n"
+        "def get_config():\n"
+        "    return Config()\n"
+    )
+
+    loader = FileSystemCodebaseLoader(organization_id=ORG_ID)
+    nodes, edges = loader.load(str(root))
+
+    caller = _find_node(nodes, function_name="get_config")
+    target_class = _find_node(nodes, class_name="Config")
+
+    instantiates = [
+        e for e in edges
+        if str(e.from_urn) == str(caller.urn)
+        and str(e.to_urn) == str(target_class.urn)
+        and e.edge_type == "instantiates"
+    ]
+    assert len(instantiates) == 1, (
+        f"Expected 1 instantiates edge from get_config -> Config, "
+        f"found {len(instantiates)}"
     )

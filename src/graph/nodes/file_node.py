@@ -21,10 +21,10 @@ class FileNode(Node):
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,
+        DependsOnEdge,
     })
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,
-        DependsOnEdge,
     })
 
     @classmethod

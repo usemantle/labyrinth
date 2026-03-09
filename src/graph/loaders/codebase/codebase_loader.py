@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import abc
 import logging
+import os
 import uuid
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -56,6 +58,17 @@ class PostProcessContext:
     """Mapping of rel_path → ast-grep language name."""
     build_urn: Callable[..., URN]
     """The loader's build_urn method for constructing URNs."""
+
+@dataclass
+class _FileResult:
+    """Result of processing a single file in Phase 1."""
+
+    rel_path: str
+    language: str | None
+    nodes: list[Node]
+    edges: list[Edge]
+    source: str | None
+
 
 # ── File extension → ast-grep language mapping ───────────────────────
 
@@ -161,10 +174,12 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
         *,
         exclude_dirs: set[str] | None = None,
         plugins: list[CodebasePlugin] | None = None,
+        max_workers: int | None = None,
     ):
         super().__init__(organization_id)
         self._exclude_dirs = exclude_dirs or DEFAULT_EXCLUDE_DIRS
         self._plugins = plugins or []
+        self._max_workers = max_workers
 
     @classmethod
     def available_plugins(cls) -> dict[str, type[CodebasePlugin]]:
@@ -215,34 +230,23 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
         codebase_urn = self.build_urn(root_name)
         nodes.append(self._build_codebase_node(codebase_urn, root_name, len(files)))
 
-        # Phase 1: Structural extraction
-        for file_path in files:
-            rel_path = str(file_path.relative_to(root_path))
-            language = self._detect_language(file_path)
-
-            file_urn = self.build_urn(root_name, rel_path)
-            nodes.append(FileNode.create(
-                self.organization_id,
-                file_urn,
-                codebase_urn,
-                file_path=rel_path,
-                language=language or "unknown",
-                size_bytes=file_path.stat().st_size,
-            ))
-            edges.append(ContainsEdge.create(
-                self.organization_id, codebase_urn, file_urn,
-            ))
-
-            # AST analysis for supported languages
-            if language and language in LANGUAGE_CONFIGS:
-                file_nodes, file_edges, source = self._analyze_file(
-                    file_path, language, file_urn, root_name, rel_path,
-                )
-                nodes.extend(file_nodes)
-                edges.extend(file_edges)
-                if source is not None:
-                    file_sources[rel_path] = source
-                    file_languages[rel_path] = language
+        # Phase 1: Structural extraction (parallelized per file)
+        workers = self._max_workers or min(os.cpu_count() or 4, 8, len(files) or 1)
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(
+                    self._process_single_file,
+                    file_path, root_path, root_name, codebase_urn,
+                ): file_path
+                for file_path in files
+            }
+            for future in as_completed(futures):
+                result = future.result()
+                nodes.extend(result.nodes)
+                edges.extend(result.edges)
+                if result.source is not None and result.language:
+                    file_sources[result.rel_path] = result.source
+                    file_languages[result.rel_path] = result.language
 
         logger.info(
             "Structural extraction: %d nodes, %d edges from %s",
@@ -269,6 +273,53 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
         )
 
         return nodes, edges
+
+    # ------------------------------------------------------------------
+    # Per-file processing (called from thread pool)
+    # ------------------------------------------------------------------
+
+    def _process_single_file(
+        self,
+        file_path: Path,
+        root_path: Path,
+        root_name: str,
+        codebase_urn: URN,
+    ) -> _FileResult:
+        """Process one file independently, returning all nodes and edges."""
+        rel_path = str(file_path.relative_to(root_path))
+        language = self._detect_language(file_path)
+
+        file_urn = self.build_urn(root_name, rel_path)
+        file_node = FileNode.create(
+            self.organization_id,
+            file_urn,
+            codebase_urn,
+            file_path=rel_path,
+            language=language or "unknown",
+            size_bytes=file_path.stat().st_size,
+        )
+        contains_edge = ContainsEdge.create(
+            self.organization_id, codebase_urn, file_urn,
+        )
+
+        result_nodes: list[Node] = [file_node]
+        result_edges: list[Edge] = [contains_edge]
+        source: str | None = None
+
+        if language and language in LANGUAGE_CONFIGS:
+            file_nodes, file_edges, source = self._analyze_file(
+                file_path, language, file_urn, root_name, rel_path,
+            )
+            result_nodes.extend(file_nodes)
+            result_edges.extend(file_edges)
+
+        return _FileResult(
+            rel_path=rel_path,
+            language=language,
+            nodes=result_nodes,
+            edges=result_edges,
+            source=source,
+        )
 
     # ------------------------------------------------------------------
     # Overridable hooks

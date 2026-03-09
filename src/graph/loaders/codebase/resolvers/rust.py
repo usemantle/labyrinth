@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from ast_grep_py import SgRoot
 
 from src.graph.edges.calls_edge import CallsEdge
+from src.graph.edges.instantiates_edge import InstantiatesEdge
 from src.graph.graph_models import (
     Edge,
     EdgeMetadataKey,
@@ -50,6 +51,8 @@ class RustAnalyzer(LanguageAnalyzer):
 
         func_index = _build_function_index(nodes)
         funcs_by_file = _build_funcs_by_file(nodes)
+        class_index = _build_class_index(nodes)
+        classes_by_file = _build_classes_by_file(nodes)
 
         new_edges: list[Edge] = []
         for node in nodes:
@@ -70,18 +73,29 @@ class RustAnalyzer(LanguageAnalyzer):
                 for n in funcs_by_file.get(rel_path, [])
                 if n is not node
             }
+            same_file_classes = {
+                n.metadata[NodeMetadataKey.CLASS_NAME]
+                for n in classes_by_file.get(rel_path, [])
+            }
 
             for call in calls:
                 target = _resolve_call_target(
                     call, file_imports, same_file_funcs,
                     func_index, rel_path, file_sources,
+                    class_index, same_file_classes,
                 )
                 if target is None:
                     continue
-                edge = CallsEdge.create(
-                    context.organization_id,
-                    node.urn, target.urn,
-                )
+                if call.call_type == "class_instantiation":
+                    edge = InstantiatesEdge.create(
+                        context.organization_id,
+                        node.urn, target.urn,
+                    )
+                else:
+                    edge = CallsEdge.create(
+                        context.organization_id,
+                        node.urn, target.urn,
+                    )
                 edge.metadata[EdgeMetadataKey.CALL_TYPE] = call.call_type
                 new_edges.append(edge)
 
@@ -313,6 +327,31 @@ def _build_funcs_by_file(nodes: list[Node]) -> dict[str, list[Node]]:
     return by_file
 
 
+def _build_class_index(nodes: list[Node]) -> dict[tuple[str, str], Node]:
+    """Build (rel_path, class_name) -> Node lookup."""
+    index: dict[tuple[str, str], Node] = {}
+    for node in nodes:
+        if NodeMetadataKey.CLASS_NAME not in node.metadata:
+            continue
+        rel_path = node.metadata.get(NodeMetadataKey.FILE_PATH)
+        class_name = node.metadata[NodeMetadataKey.CLASS_NAME]
+        if rel_path:
+            index[(rel_path, class_name)] = node
+    return index
+
+
+def _build_classes_by_file(nodes: list[Node]) -> dict[str, list[Node]]:
+    """Build rel_path -> [class nodes] lookup."""
+    by_file: dict[str, list[Node]] = {}
+    for node in nodes:
+        if NodeMetadataKey.CLASS_NAME not in node.metadata:
+            continue
+        rel_path = node.metadata.get(NodeMetadataKey.FILE_PATH)
+        if rel_path:
+            by_file.setdefault(rel_path, []).append(node)
+    return by_file
+
+
 def _get_function_source(node: Node, file_source: str) -> str | None:
     """Extract a function's source text from its file using line numbers."""
     start = node.metadata.get(NodeMetadataKey.START_LINE)
@@ -330,13 +369,15 @@ def _resolve_call_target(
     func_index: dict[tuple[str, str], Node],
     current_file: str,
     all_files: dict[str, str],
+    class_index: dict[tuple[str, str], Node],
+    same_file_classes: set[str],
 ) -> Node | None:
-    """Resolve a call site to a target function Node."""
+    """Resolve a call site to a target function or class Node."""
     name = call.callee_name
 
     # 1. Qualified path calls (e.g. crate::foo::bar::func_name)
     if "::" in name:
-        target = _resolve_qualified_call(name, func_index, all_files, current_file)
+        target = _resolve_qualified_call(name, func_index, class_index, all_files, current_file)
         if target:
             return target
         # Fall back to the last segment for import / same-file lookup.
@@ -350,10 +391,18 @@ def _resolve_call_target(
         target = func_index.get((imp.source_file, imp.source_name))
         if target:
             return target
+        target = class_index.get((imp.source_file, imp.source_name))
+        if target:
+            return target
 
     # 3. Check same-file definitions
     if name in same_file_funcs:
         target = func_index.get((current_file, name))
+        if target:
+            return target
+
+    if name in same_file_classes:
+        target = class_index.get((current_file, name))
         if target:
             return target
 
@@ -363,6 +412,7 @@ def _resolve_call_target(
 def _resolve_qualified_call(
     qualified_name: str,
     func_index: dict[tuple[str, str], Node],
+    class_index: dict[tuple[str, str], Node],
     all_files: dict[str, str],
     current_file: str,
 ) -> Node | None:
@@ -371,6 +421,7 @@ def _resolve_qualified_call(
     Tries progressively shorter prefixes as the module path while always
     using the *last* segment of the original path as the function name.
     This handles both ``crate::mod::func()`` and ``crate::mod::Type::method()``.
+    Also checks class_index for struct/class instantiations.
     """
     parts = qualified_name.split("::")
     func_name = parts[-1]
@@ -380,6 +431,9 @@ def _resolve_qualified_call(
         source_file = _resolve_rust_module(module_path, current_file, all_files)
         if source_file:
             target = func_index.get((source_file, func_name))
+            if target:
+                return target
+            target = class_index.get((source_file, func_name))
             if target:
                 return target
 

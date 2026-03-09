@@ -204,7 +204,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                         included (default 3).
             limit: Maximum number of clusters to return (default 10).
         """
-        c2c_triples = store.edges_by_type.get("calls", [])
+        c2c_triples = store.edges_by_type.get("calls", []) + store.edges_by_type.get("instantiates", [])
         c2c_nodes: set[str] = set()
         c2c_graph = nx.DiGraph()
         for from_urn, to_urn, _key in c2c_triples:

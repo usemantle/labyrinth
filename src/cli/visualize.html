@@ -90,7 +90,7 @@
   <h2>Options</h2>
   <div class="filter-row">
     <input type="checkbox" id="hide-structural" checked />
-    <label for="hide-structural">Hide structural CONTAINS</label>
+    <label for="hide-structural">Hide structural contains</label>
   </div>
 </div>
 <div id="sigma-container"></div>
@@ -122,10 +122,16 @@ const NODE_STYLES = {
 };
 
 const EDGE_STYLES = {
-  CONTAINS:     { color: "#45475a", size: 0.5 },
-  DATA_TO_DATA: { color: "#f43f5e", size: 1.5 },
-  CODE_TO_DATA: { color: "#f97316", size: 2   },
-  CODE_TO_CODE: { color: "#a78bfa", size: 1.5 },
+  contains:       { color: "#45475a", size: 0.5 },
+  hosts:          { color: "#94a3b8", size: 0.5 },
+  calls:          { color: "#a78bfa", size: 1.5 },
+  instantiates:   { color: "#c084fc", size: 1.5 },
+  reads:          { color: "#f97316", size: 2   },
+  writes:         { color: "#ef4444", size: 2   },
+  models:         { color: "#fb923c", size: 1.5 },
+  references:     { color: "#f43f5e", size: 1.5 },
+  soft_reference: { color: "#f9a8d4", size: 1.5 },
+  depends_on:     { color: "#22d3ee", size: 1   },
 };
 
 const STRUCTURAL_SOURCES = new Set(["database", "schema", "codebase", "file"]);
@@ -174,7 +180,7 @@ async function main() {
           uuid: link.id,
           from_urn: link.from_urn,
           to_urn: link.to_urn,
-          edge_type: link.edge_type || "CODE_TO_DATA",
+          edge_type: link.edge_type || "reads",
           metadata: {
             detection_method: link.detection_method || "soft_link",
             confidence: link.confidence,
@@ -233,11 +239,11 @@ function buildGraph() {
     if (!graph.hasNode(e.from_urn) || !graph.hasNode(e.to_urn)) continue;
     if (hiddenEdgeTypes.has(e.edge_type)) continue;
 
-    const isStructural = e.edge_type === "CONTAINS" &&
+    const isStructural = e.edge_type === "contains" &&
       STRUCTURAL_SOURCES.has(graph.getNodeAttribute(e.from_urn, "_type"));
     if (hideStructural && isStructural) continue;
 
-    const style = EDGE_STYLES[e.edge_type] || EDGE_STYLES.CONTAINS;
+    const style = EDGE_STYLES[e.edge_type] || EDGE_STYLES.contains;
     graph.addEdgeWithKey(`e-${edgeIdx++}`, e.from_urn, e.to_urn, {
       color: style.color,
       size: style.size,
