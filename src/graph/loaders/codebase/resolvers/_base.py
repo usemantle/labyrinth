@@ -99,3 +99,18 @@ class LanguageAnalyzer(abc.ABC):
         Returns:
             List of call sites found in the function body.
         """
+
+    def link_dependencies(
+        self,
+        nodes: list[Node],
+        edges: list[Edge],
+        file_sources: dict[str, str],
+        context: PostProcessContext,
+    ) -> tuple[list[Node], list[Edge]]:
+        """Link source files to dependency nodes via import analysis.
+
+        Runs after plugin post_process hooks, so dependency nodes
+        (from any package manager plugin) are available. Override in
+        subclasses that support dependency linking.
+        """
+        return nodes, edges

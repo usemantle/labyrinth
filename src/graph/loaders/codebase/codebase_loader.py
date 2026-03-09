@@ -191,9 +191,6 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
             SQLAlchemyPlugin,
             UvPlugin,
         )
-        from src.graph.loaders.codebase.plugins.python_dependency_linker import (
-            PythonDependencyLinkerPlugin,
-        )
         return {
             "sqlalchemy": SQLAlchemyPlugin,
             "fastapi": FastAPIPlugin,
@@ -201,7 +198,6 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
             "requests": RequestsPlugin,
             "boto3-s3": Boto3S3Plugin,
             "uv": UvPlugin,
-            "python-imports": PythonDependencyLinkerPlugin,
         }
 
     # ------------------------------------------------------------------
@@ -396,6 +392,13 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
         # Run language-specific plugins, then universal plugins
         for plugin in lang_plugins + universal_plugins:
             nodes, edges = plugin.post_process(nodes, edges, ctx)
+
+        # Dependency linking (runs after plugins so DependencyNodes exist)
+        for lang, sources in files_by_lang.items():
+            analyzer = LANGUAGE_ANALYZERS.get(lang)
+            if not analyzer:
+                continue
+            nodes, edges = analyzer.link_dependencies(nodes, edges, sources, ctx)
 
         return nodes, edges
 

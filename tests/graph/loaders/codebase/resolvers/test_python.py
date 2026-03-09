@@ -266,3 +266,56 @@ def test_same_file_class_instantiation(tmp_path):
         f"Expected 1 instantiates edge from get_config -> Config, "
         f"found {len(instantiates)}"
     )
+
+
+# ── Tests: Dependency linking ─────────────────────────────────────────
+
+
+def test_link_dependencies_creates_depends_on_edges(tmp_path):
+    """PythonAnalyzer.link_dependencies() should create DependsOn edges
+    from files to dependency nodes based on imports."""
+    from src.graph.graph_models import URN
+    from src.graph.loaders.codebase.codebase_loader import PostProcessContext
+    from src.graph.loaders.codebase.resolvers.python import PythonAnalyzer
+    from src.graph.nodes.dependency_node import DependencyNode
+    from src.graph.nodes.file_node import FileNode
+
+    root = tmp_path / "myapp"
+    root.mkdir()
+    (root / "__init__.py").write_text("")
+    (root / "service.py").write_text("import requests\n\ndef fetch():\n    return requests.get('http://example.com')\n")
+
+    # Create nodes that would normally come from Phase 1 + UvPlugin
+    file_node = FileNode.create(
+        ORG_ID,
+        URN("urn:local:codebase:::myapp/service.py"),
+        URN("urn:local:codebase:::myapp"),
+        file_path="service.py",
+        language="python",
+    )
+    dep_node = DependencyNode.create(
+        ORG_ID,
+        URN("urn:pypi:package:::requests"),
+        package_name="requests",
+        package_version="2.31.0",
+    )
+    nodes = [file_node, dep_node]
+    edges = []
+
+    ctx = PostProcessContext(
+        root_path=root,
+        root_name="myapp",
+        organization_id=ORG_ID,
+        file_sources={"service.py": (root / "service.py").read_text()},
+        file_languages={"service.py": "python"},
+        build_urn=lambda *parts: URN(f"urn:local:codebase:::{'/'.join(parts)}"),
+    )
+
+    analyzer = PythonAnalyzer()
+    nodes, edges = analyzer.link_dependencies(nodes, edges, ctx.file_sources, ctx)
+
+    depends_on = [e for e in edges if e.edge_type == "depends_on"]
+    assert len(depends_on) == 1
+    assert str(depends_on[0].from_urn) == str(file_node.urn)
+    assert str(depends_on[0].to_urn) == str(dep_node.urn)
+    assert depends_on[0].metadata.get("import_name") == "requests"
