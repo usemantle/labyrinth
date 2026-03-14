@@ -9,6 +9,8 @@ from src.graph.nodes.dependency_node import DependencyNode
 from src.graph.nodes.file_node import FileNode
 from src.graph.nodes.function_node import FunctionNode
 from src.graph.nodes.identity_node import IdentityNode
+from src.graph.nodes.image_node import ImageNode
+from src.graph.nodes.image_repository_node import ImageRepositoryNode
 from src.graph.nodes.object_path_node import ObjectPathNode
 from src.graph.nodes.schema_node import SchemaNode
 from src.graph.nodes.table_node import TableNode
@@ -23,6 +25,8 @@ __all__ = [
     "FileNode",
     "FunctionNode",
     "IdentityNode",
+    "ImageNode",
+    "ImageRepositoryNode",
     "ObjectPathNode",
     "SchemaNode",
     "TableNode",

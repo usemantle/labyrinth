@@ -11,7 +11,7 @@ from src.graph.graph_models import URN, Edge, Node
 from src.graph.loaders import LOADER_REGISTRY
 from src.graph.loaders.loader import ConceptLoader
 from src.graph.sinks.sink import Sink
-from src.graph.stitching import stitch_code_to_data
+from src.graph.stitching import stitch_code_to_data, stitch_code_to_images
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +108,11 @@ def run_scan(
     else:
         all_nodes = all_data_nodes + all_code_nodes
         all_edges = list(all_data_edges) + list(all_code_edges)
+
+    # Stitch code-to-image edges if image repositories exist.
+    all_nodes, all_edges = stitch_code_to_images(
+        project_id, all_nodes, all_edges,
+    )
 
     # Enrich sensitivity metadata
     all_nodes = enrich_sensitivity(all_nodes)

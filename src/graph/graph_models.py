@@ -96,6 +96,17 @@ class NodeMetadataKey(str, enum.Enum):
     SAMPLE_KEYS = "sample_keys"
     PARTITION_TYPE = "partition_type"
 
+    # ── Container images ───────────────────────────────────────────────
+    REPOSITORY_NAME = "repository_name"
+    REPOSITORY_URI = "repository_uri"
+    IMAGE_DIGEST = "image_digest"
+    IMAGE_TAGS = "image_tags"
+    IMAGE_PUSHED_AT = "image_pushed_at"
+    IMAGE_SIZE_BYTES = "image_size_bytes"
+    OCI_SOURCE = "oci_source"
+    OCI_REVISION = "oci_revision"
+    DOCKERFILE_BASE_IMAGES = "dockerfile_base_images"
+
 
 class EdgeMetadataKey(str, enum.Enum):
     """Valid keys for Edge metadata dictionaries."""

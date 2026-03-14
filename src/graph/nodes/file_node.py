@@ -6,6 +6,7 @@ import uuid
 from dataclasses import dataclass
 from typing import ClassVar
 
+from src.graph.edges.builds_edge import BuildsEdge
 from src.graph.edges.contains_edge import ContainsEdge
 from src.graph.edges.depends_on_edge import DependsOnEdge
 from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
@@ -20,6 +21,7 @@ class FileNode(Node):
     node_type: str = "file"
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
+        BuildsEdge,
         ContainsEdge,
         DependsOnEdge,
     })

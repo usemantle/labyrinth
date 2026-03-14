@@ -191,6 +191,7 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
             SQLAlchemyPlugin,
             UvPlugin,
         )
+        from src.graph.loaders.codebase.plugins.dockerfile_plugin import DockerfilePlugin
         return {
             "sqlalchemy": SQLAlchemyPlugin,
             "fastapi": FastAPIPlugin,
@@ -198,6 +199,7 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
             "requests": RequestsPlugin,
             "boto3-s3": Boto3S3Plugin,
             "uv": UvPlugin,
+            "dockerfile": DockerfilePlugin,
         }
 
     # ------------------------------------------------------------------
@@ -526,7 +528,7 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
                 body = actual.field("body")
                 body_source = body.text() if body else ""
                 for plugin in self._plugins:
-                    if language in plugin.supported_languages():
+                    if language in (plugin.supported_languages() or ()):
                         class_node = plugin.on_class_node(class_node, body_source)
 
                 nodes.append(class_node)
@@ -572,7 +574,7 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
                 # Run plugins on function node (child.text() includes decorators)
                 func_source = child.text()
                 for plugin in self._plugins:
-                    if language in plugin.supported_languages():
+                    if language in (plugin.supported_languages() or ()):
                         func_node = plugin.on_function_node(func_node, func_source)
 
                 nodes.append(func_node)
