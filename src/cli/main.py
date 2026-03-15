@@ -381,6 +381,17 @@ def agent() -> None:
     """Autonomous agent commands."""
 
 
+def _build_heuristic_help() -> str:
+    """Build the help text listing all registered heuristics."""
+    from src.agent.heuristics import ALL_HEURISTICS
+
+    lines = ["Run the discovery agent.", "", "\b", "Available heuristics:"]
+    max_name = max(len(h.name) for h in ALL_HEURISTICS)
+    for h in sorted(ALL_HEURISTICS, key=lambda h: h.name):
+        lines.append(f"  {h.name:<{max_name}}  ({h.output_type})")
+    return "\n".join(lines)
+
+
 @agent.command()
 @click.option("--dry-run", is_flag=True, help="Show candidates without invoking the agent.")
 @click.option(
@@ -390,7 +401,6 @@ def agent() -> None:
     help="Run only the named heuristic(s). Can be specified multiple times. Omit to run all.",
 )
 def run(dry_run: bool, heuristic: tuple[str, ...]) -> None:
-    """Run the discovery agent."""
     import asyncio
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -419,6 +429,9 @@ def run(dry_run: bool, heuristic: tuple[str, ...]) -> None:
     from src.agent.runner import run_discovery
 
     asyncio.run(run_discovery(project_dir, dry_run=dry_run, heuristic_names=heuristic_names))
+
+
+run.help = _build_heuristic_help()
 
 
 # ── Config commands ───────────────────────────────────────────────────
