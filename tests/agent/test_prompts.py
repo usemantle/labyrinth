@@ -15,6 +15,7 @@ def _make_store(nodes: list[dict], edges: list[dict] | None = None) -> GraphStor
         "generated_at": "2024-01-01T00:00:00Z",
         "nodes": nodes,
         "edges": edges or [],
+        "soft_links": [],
     }
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(data, f)
@@ -43,8 +44,7 @@ class TestBuildInvestigationPrompt:
             source_node_type="file",
             source_metadata={"dockerfile_base_images": ["python:3.12"]},
             heuristic_name="unlinked_dockerfile",
-            target_edge_type="builds",
-            target_node_type="image_repository",
+            output_type="soft_link",
             skill_file="",
         )
         ecr_node = {
@@ -61,9 +61,7 @@ class TestBuildInvestigationPrompt:
         try:
             prompt = build_investigation_prompt(candidate, store)
             assert candidate.source_urn in prompt
-            assert "builds" in prompt
-            assert "image_repository" in prompt
-            assert ecr_node["urn"] in prompt
+            assert "unlinked_dockerfile" in prompt
         finally:
             store.stop_watcher()
 
@@ -73,8 +71,7 @@ class TestBuildInvestigationPrompt:
             source_node_type="function",
             source_metadata={"aws_s3_operations": ["put_object"]},
             heuristic_name="unlinked_s3_code",
-            target_edge_type="writes",
-            target_node_type="s3_bucket",
+            output_type="soft_link",
             skill_file="",
         )
         node = {"urn": "urn:test", "node_type": "function", "metadata": {}}
@@ -85,21 +82,21 @@ class TestBuildInvestigationPrompt:
         finally:
             store.stop_watcher()
 
-    def test_no_targets_message(self):
+    def test_soft_link_output_includes_instructions(self):
         candidate = Candidate(
             source_urn="urn:test",
             source_node_type="file",
             source_metadata={},
             heuristic_name="unlinked_dockerfile",
-            target_edge_type="builds",
-            target_node_type="image_repository",
+            output_type="soft_link",
             skill_file="",
         )
         node = {"urn": "urn:test", "node_type": "file", "metadata": {}}
         store = _make_store([node])
         try:
             prompt = build_investigation_prompt(candidate, store)
-            assert "None found in graph" in prompt
+            assert "add_soft_link" in prompt
+            assert "update_node_metadata" in prompt
         finally:
             store.stop_watcher()
 
@@ -109,8 +106,7 @@ class TestBuildInvestigationPrompt:
             source_node_type="file",
             source_metadata={},
             heuristic_name="unlinked_dockerfile",
-            target_edge_type="builds",
-            target_node_type="image_repository",
+            output_type="soft_link",
             skill_file="link-dockerfile-to-ecr.md",
         )
         node = {"urn": "urn:test", "node_type": "file", "metadata": {}}
