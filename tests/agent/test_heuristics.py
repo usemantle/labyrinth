@@ -8,10 +8,12 @@ import tempfile
 import pytest
 
 from src.agent.heuristics import (
+    InsecureEndpoint,
     OrphanedEcrRepo,
     UnlinkedDockerfile,
     UnlinkedOrmModel,
     UnlinkedS3Code,
+    VulnerableDependency,
     gather_all_candidates,
 )
 from src.mcp.graph_store import GraphStore
@@ -195,9 +197,121 @@ class TestOrphanedEcrRepo:
         assert "builds" in instructions
 
 
+class TestInsecureEndpoint:
+    heuristic = InsecureEndpoint()
+
+    def test_returns_unauthenticated_endpoint(self):
+        node = {
+            "urn": "urn:github:repo:org:::org/app/src/main.py::get_file",
+            "node_type": "function",
+            "metadata": {
+                "function_name": "get_file",
+                "http_method": "GET",
+                "route_path": "/files/{file_path}",
+            },
+        }
+        store = _make_store([node])
+        try:
+            candidates = self.heuristic.find(store)
+            assert len(candidates) == 1
+            assert candidates[0].heuristic_name == "insecure_endpoint"
+            assert candidates[0].output_type == "remediation"
+        finally:
+            store.stop_watcher()
+
+    def test_ignores_authenticated_endpoint(self):
+        node = {
+            "urn": "urn:github:repo:org:::org/app/src/main.py::get_file",
+            "node_type": "function",
+            "metadata": {
+                "function_name": "get_file",
+                "http_method": "GET",
+                "route_path": "/files/{file_path}",
+                "auth_scheme": "oauth2",
+            },
+        }
+        store = _make_store([node])
+        try:
+            assert self.heuristic.find(store) == []
+        finally:
+            store.stop_watcher()
+
+    def test_ignores_non_http_function(self):
+        node = {
+            "urn": "urn:github:repo:org:::org/app/src/utils.py::helper",
+            "node_type": "function",
+            "metadata": {"function_name": "helper"},
+        }
+        store = _make_store([node])
+        try:
+            assert self.heuristic.find(store) == []
+        finally:
+            store.stop_watcher()
+
+
+class TestVulnerableDependency:
+    heuristic = VulnerableDependency()
+
+    def test_returns_dependency_with_cves(self):
+        node = {
+            "urn": "urn:github:repo:org:::org/app/aiohttp",
+            "node_type": "dependency",
+            "metadata": {
+                "package_name": "aiohttp",
+                "package_version": "3.9.1",
+                "cve_ids": ["CVE-2024-23334"],
+            },
+        }
+        store = _make_store([node])
+        try:
+            candidates = self.heuristic.find(store)
+            assert len(candidates) == 1
+            assert candidates[0].heuristic_name == "vulnerable_dependency"
+            assert candidates[0].output_type == "remediation"
+        finally:
+            store.stop_watcher()
+
+    def test_ignores_clean_dependency(self):
+        node = {
+            "urn": "urn:github:repo:org:::org/app/fastapi",
+            "node_type": "dependency",
+            "metadata": {
+                "package_name": "fastapi",
+                "package_version": "0.115.0",
+            },
+        }
+        store = _make_store([node])
+        try:
+            assert self.heuristic.find(store) == []
+        finally:
+            store.stop_watcher()
+
+
 class TestGatherAll:
     def test_combines_all_heuristics(self, dockerfile_node, ecr_node, function_with_s3, orm_class):
-        store = _make_store([dockerfile_node, ecr_node, function_with_s3, orm_class])
+        # Add nodes for the new heuristics too
+        unauthenticated_endpoint = {
+            "urn": "urn:github:repo:org:::org/app/src/main.py::get_file",
+            "node_type": "function",
+            "metadata": {
+                "function_name": "get_file",
+                "http_method": "GET",
+                "route_path": "/files/{file_path}",
+            },
+        }
+        vulnerable_dep = {
+            "urn": "urn:github:repo:org:::org/app/aiohttp",
+            "node_type": "dependency",
+            "metadata": {
+                "package_name": "aiohttp",
+                "package_version": "3.9.1",
+                "cve_ids": ["CVE-2024-23334"],
+            },
+        }
+        store = _make_store([
+            dockerfile_node, ecr_node, function_with_s3, orm_class,
+            unauthenticated_endpoint, vulnerable_dep,
+        ])
         try:
             candidates = gather_all_candidates(store)
             heuristic_names = {c.heuristic_name for c in candidates}
@@ -205,5 +319,7 @@ class TestGatherAll:
             assert "unlinked_s3_code" in heuristic_names
             assert "unlinked_orm_model" in heuristic_names
             assert "orphaned_ecr_repo" in heuristic_names
+            assert "insecure_endpoint" in heuristic_names
+            assert "vulnerable_dependency" in heuristic_names
         finally:
             store.stop_watcher()
