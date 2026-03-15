@@ -37,14 +37,3 @@ The goal is to assess the impact, find a fixed version, and document findings.
    Use `Read` and `Grep` to examine how the package is used in the codebase.
    Determine if upgrading to the fixed version would introduce breaking changes.
 
-## Output
-
-After completing the investigation, call `update_node_metadata` with:
-```
-update_node_metadata(
-    urn=<dependency_urn>,
-    metadata='{"vulnerable_dependency_last_evaluated_at": "<ISO timestamp>", "vulnerable_dependency_fixed_version": "<version or null>", "vulnerable_dependency_finding": "<brief description>"}'
-)
-```
-
-Always set `vulnerable_dependency_last_evaluated_at` even if no fix is available.

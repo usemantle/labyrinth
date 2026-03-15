@@ -8,12 +8,63 @@ from pathlib import Path
 
 from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
 
+from src.agent.action_log import ActionCollector
 from src.agent.candidates import Candidate, CandidateResult
-from src.agent.heuristics._base import OutputType
+from src.agent.heuristics._base import TERMINAL_ACTION_MCP_SERVERS, TerminalAction
 from src.agent.prompts import build_investigation_prompt, build_system_prompt
 from src.mcp.graph_store import GraphStore
 
 logger = logging.getLogger(__name__)
+
+
+def _collect_mcp_servers(candidate: Candidate, graph_path: str) -> dict:
+    """Build the MCP server dict from the candidate's terminal actions."""
+    servers: dict = {
+        "knowledge": {
+            "command": "uv",
+            "args": ["run", "labyrinth", "mcp", "--graph-path", graph_path],
+        },
+    }
+    for action_str in candidate.terminal_actions:
+        action = TerminalAction(action_str)
+        if action in TERMINAL_ACTION_MCP_SERVERS:
+            for name, config in TERMINAL_ACTION_MCP_SERVERS[action].items():
+                if name == "github" and not os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN"):
+                    continue
+                servers[name] = config
+    return servers
+
+
+async def _generate_summary(agent_result_text: str, collector: ActionCollector) -> str:
+    """Generate a short summary of the agent's investigation using a lightweight model."""
+    action_descriptions = [
+        f"- {a.action_type}: {a.tool_name}({', '.join(f'{k}={v!r}' for k, v in list(a.input.items())[:3])})"
+        for a in collector.actions
+    ]
+    actions_text = "\n".join(action_descriptions) if action_descriptions else "(no MCP actions taken)"
+
+    prompt = (
+        "Summarize what you investigated and why in 2-4 sentences.\n\n"
+        f"## Agent result\n{agent_result_text[:2000]}\n\n"
+        f"## Actions taken\n{actions_text}"
+    )
+
+    summary = ""
+    try:
+        async for message in query(
+            prompt=prompt,
+            options=ClaudeAgentOptions(
+                model="claude-haiku-4-5",
+                permission_mode="bypassPermissions",
+                system_prompt="You are a concise summarizer. Output only the summary, nothing else.",
+            ),
+        ):
+            if isinstance(message, ResultMessage):
+                summary = message.result or ""
+    except Exception:
+        logger.exception("Failed to generate agent summary")
+
+    return summary
 
 
 async def emit_candidate(
@@ -26,21 +77,10 @@ async def emit_candidate(
     system = build_system_prompt()
 
     agent_result_text = ""
+    collector = ActionCollector()
 
     graph_path = str(project_dir / "graph.json")
-
-    mcp_servers = {
-        "knowledge": {
-            "command": "uv",
-            "args": ["run", "labyrinth", "mcp", "--graph-path", graph_path],
-        },
-    }
-    if candidate.output_type == OutputType.REMEDIATION:
-        if os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN"):
-            mcp_servers["github"] = {
-                "command": "npx",
-                "args": ["-y", "@modelcontextprotocol/server-github"],
-            }
+    mcp_servers = _collect_mcp_servers(candidate, graph_path)
 
     try:
         async for message in query(
@@ -52,6 +92,7 @@ async def emit_candidate(
                 permission_mode="bypassPermissions",
                 system_prompt=system,
                 model="claude-sonnet-4-6",
+                hooks={"PostToolUse": [collector.as_hook()]},
             ),
         ):
             if isinstance(message, ResultMessage):
@@ -66,8 +107,8 @@ async def emit_candidate(
         return CandidateResult(
             candidate=candidate,
             outcome="error",
-            soft_link_id=None,
             note=f"Agent raised an exception for {candidate.source_urn}",
+            actions=collector.actions,
         )
 
     # Detect outcome by checking if the agent set the evaluation metadata
@@ -79,11 +120,17 @@ async def emit_candidate(
     else:
         outcome = "rejected"
 
+    # Generate a summary of the investigation
+    agent_summary = await _generate_summary(agent_result_text, collector)
+
     return CandidateResult(
         candidate=candidate,
         outcome=outcome,
-        soft_link_id=None,
         note=agent_result_text or "Agent did not produce output.",
+        actions=collector.actions,
+        agent_summary=agent_summary,
+        soft_link_id=collector.extract_soft_link_id(),
+        links_evaluated=collector.extract_links_evaluated() or None,
     )
 
 

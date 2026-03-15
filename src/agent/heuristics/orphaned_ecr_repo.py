@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.agent.heuristics._base import BaseHeuristic
+from src.agent.heuristics._base import BaseHeuristic, TerminalAction
 from src.graph.graph_models import NodeType
 
 
@@ -10,6 +10,7 @@ class OrphanedEcrRepo(BaseHeuristic):
     name = "orphaned_ecr_repo"
     source_node_type = NodeType.IMAGE_REPOSITORY
     metadata_key = ""  # no metadata filter — all ECR repos are candidates
+    terminal_actions = [TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_SOFT_LINK]
     skill_file = "link-dockerfile-to-ecr.md"
 
     @classmethod

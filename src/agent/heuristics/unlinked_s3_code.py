@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.agent.heuristics._base import BaseHeuristic
+from src.agent.heuristics._base import BaseHeuristic, TerminalAction
 from src.graph.graph_models import NodeType
 
 
@@ -10,6 +10,7 @@ class UnlinkedS3Code(BaseHeuristic):
     name = "unlinked_s3_code"
     source_node_type = NodeType.FUNCTION
     metadata_key = "aws_s3_operations"
+    terminal_actions = [TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_SOFT_LINK]
     skill_file = "link-code-to-s3.md"
 
     @classmethod

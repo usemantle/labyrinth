@@ -38,6 +38,10 @@ const state = {
   mouseX: 0,
   mouseY: 0,
 
+  // Reports / dashboard
+  reports: { runs: [] },
+  _dashboardLoaded: false,
+
   // Callbacks (set by graph-app.js)
   requestRefresh: () => {},
   requestRebuild: () => {},

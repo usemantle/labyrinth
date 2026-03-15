@@ -15,12 +15,12 @@ def _make_result(outcome: str, note: str = "", soft_link_id: str | None = None) 
             source_node_type="file",
             source_metadata={},
             heuristic_name="test",
-            output_type="soft_link",
+            terminal_actions=["mark_evaluated"],
             skill_file="",
         ),
         outcome=outcome,
-        soft_link_id=soft_link_id,
         note=note,
+        soft_link_id=soft_link_id,
     )
 
 
@@ -63,23 +63,34 @@ class TestFormatReport:
 
 
 class TestSaveReport:
-    def test_creates_files(self, tmp_path):
+    def test_creates_reports_json(self, tmp_path):
         results = [
             _make_result("linked", "found it", "id-1"),
             _make_result("rejected"),
         ]
-        txt_path = save_report(results, tmp_path)
+        reports_path = save_report(results, tmp_path, run_id="test-run-id", started_at="2024-01-01T00:00:00Z")
 
-        assert txt_path.exists()
-        assert txt_path.suffix == ".txt"
-        assert "Candidates investigated: 2" in txt_path.read_text()
+        assert reports_path.exists()
+        assert reports_path.name == "reports.json"
 
-        # JSON file should be alongside the txt
-        json_files = list((tmp_path / "agent_reports").glob("*.json"))
-        assert len(json_files) == 1
+        data = json.loads(reports_path.read_text())
+        assert len(data["runs"]) == 1
 
-        data = json.loads(json_files[0].read_text())
-        assert data["total"] == 2
-        assert data["linked"] == 1
-        assert data["rejected"] == 1
-        assert len(data["results"]) == 2
+        run = data["runs"][0]
+        assert run["run_id"] == "test-run-id"
+        assert run["summary"]["total_candidates"] == 2
+        assert run["summary"]["linked"] == 1
+        assert run["summary"]["rejected"] == 1
+        assert len(run["results"]) == 2
+
+    def test_appends_to_existing(self, tmp_path):
+        results = [_make_result("linked", "first", "id-1")]
+        save_report(results, tmp_path, run_id="run-1", started_at="2024-01-01T00:00:00Z")
+
+        results2 = [_make_result("rejected", "second")]
+        save_report(results2, tmp_path, run_id="run-2", started_at="2024-01-02T00:00:00Z")
+
+        data = json.loads((tmp_path / "reports.json").read_text())
+        assert len(data["runs"]) == 2
+        assert data["runs"][0]["run_id"] == "run-1"
+        assert data["runs"][1]["run_id"] == "run-2"

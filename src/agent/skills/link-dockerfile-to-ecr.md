@@ -35,28 +35,6 @@ codebase name to the ECR repository name.
    - `MEDIUM` — naming patterns suggest a match but no hard evidence
    - `LOW` — weak or circumstantial evidence only
 
-6. **Create the soft link:**
-   ```
-   add_soft_link(
-       from_urn=<dockerfile_file_urn>,
-       to_urn=<ecr_repository_urn>,
-       edge_type="builds",
-       confidence="HIGH",
-       note="Dockerfile in testapp codebase builds the labyrinth-test-app ECR image; confirmed via ECS task definition referencing this ECR repo"
-   )
-   ```
-
-7. **Mark evaluation complete:**
-   After completing the investigation (whether or not you created a soft link),
-   mark the node as evaluated so it is not re-investigated:
-   ```
-   update_node_metadata(
-       urn=<dockerfile_file_urn>,
-       metadata='{"<heuristic_name>_last_evaluated_at": "<current ISO timestamp>"}'
-   )
-   ```
-   The `heuristic_name` is provided in the investigation prompt.
-
 ## Important
 - The `from_urn` must be the **file** node (the Dockerfile), not the codebase node.
 - The `to_urn` must be the **image_repository** node, not an individual image node.

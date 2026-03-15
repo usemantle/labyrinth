@@ -12,16 +12,47 @@ from src.mcp.graph_store import GraphStore
 SKILL_DIR = Path(__file__).resolve().parent.parent / "skills"
 
 
-class OutputType(enum.StrEnum):
-    SOFT_LINK = "soft_link"       # Agent creates a soft link between nodes
-    REMEDIATION = "remediation"   # Agent evaluates risk, marks findings, creates PR
+class TerminalAction(enum.StrEnum):
+    MARK_EVALUATED = "mark_evaluated"
+    CREATE_SOFT_LINK = "create_soft_link"
+    CREATE_PR = "create_pr"
+
+
+TERMINAL_ACTION_PROMPTS: dict[TerminalAction, str] = {
+    TerminalAction.MARK_EVALUATED: (
+        "Call `update_node_metadata` with:\n"
+        "- urn: `{source_urn}`\n"
+        '- metadata: a JSON object including `"{heuristic_name}_last_evaluated_at"` '
+        "set to the current ISO timestamp, plus any finding/risk fields documented "
+        "in the playbook."
+    ),
+    TerminalAction.CREATE_SOFT_LINK: (
+        "If evidence supports a relationship, call `add_soft_link` with appropriate "
+        "edge_type, confidence, and note. If evidence is insufficient, explain your "
+        "reasoning."
+    ),
+    TerminalAction.CREATE_PR: (
+        "If a fix is available, create a branch and open a pull request to remediate "
+        "the issue using the GitHub MCP tools (create_or_update_file, create_branch, "
+        "create_pull_request)."
+    ),
+}
+
+TERMINAL_ACTION_MCP_SERVERS: dict[TerminalAction, dict] = {
+    TerminalAction.CREATE_PR: {
+        "github": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-github"],
+        },
+    },
+}
 
 
 class BaseHeuristic(ABC):
     """A heuristic detects candidate nodes worth investigating.
 
     Subclasses define what to look for (source node type, metadata key),
-    the output type, and how to investigate (instructions + optional playbook).
+    the terminal actions, and how to investigate (instructions + optional playbook).
 
     The default ``find()`` implementation covers the common pattern:
     iterate all nodes of ``source_node_type``, check for ``metadata_key``
@@ -36,11 +67,19 @@ class BaseHeuristic(ABC):
     source_node_type: str  # e.g. "file", "function", "class"
     metadata_key: str  # metadata key whose presence triggers this heuristic
 
-    # ── Output type ──
-    output_type: OutputType = OutputType.SOFT_LINK
+    # ── Terminal actions ──
+    terminal_actions: list[TerminalAction] = [TerminalAction.MARK_EVALUATED]
 
     # ── Skill file (optional) ──
     skill_file: str = ""
+
+    @property
+    def needs_github(self) -> bool:
+        """Return True if any terminal action requires the GitHub MCP server."""
+        return any(
+            action in TERMINAL_ACTION_MCP_SERVERS
+            for action in self.terminal_actions
+        )
 
     def find(self, store: GraphStore) -> list[Candidate]:
         """Scan the graph for nodes matching this heuristic.
@@ -60,7 +99,7 @@ class BaseHeuristic(ABC):
                         source_node_type=self.source_node_type,
                         source_metadata=dict(meta),
                         heuristic_name=self.name,
-                        output_type=self.output_type,
+                        terminal_actions=[str(a) for a in self.terminal_actions],
                         skill_file=self.skill_file,
                     )
                 )

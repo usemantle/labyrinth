@@ -8,11 +8,10 @@ To add a new heuristic:
 from __future__ import annotations
 
 from src.agent.candidates import Candidate
-from src.agent.heuristics._base import BaseHeuristic, OutputType
+from src.agent.heuristics._base import BaseHeuristic, TerminalAction
 from src.agent.heuristics.insecure_endpoint import InsecureEndpoint
 from src.agent.heuristics.orphaned_ecr_repo import OrphanedEcrRepo
 from src.agent.heuristics.unlinked_dockerfile import UnlinkedDockerfile
-from src.agent.heuristics.unlinked_orm_model import UnlinkedOrmModel
 from src.agent.heuristics.unlinked_s3_code import UnlinkedS3Code
 from src.agent.heuristics.vulnerable_dependency import VulnerableDependency
 from src.mcp.graph_store import GraphStore
@@ -20,7 +19,6 @@ from src.mcp.graph_store import GraphStore
 ALL_HEURISTICS: list[BaseHeuristic] = [
     UnlinkedDockerfile(),
     UnlinkedS3Code(),
-    UnlinkedOrmModel(),
     OrphanedEcrRepo(),
     InsecureEndpoint(),
     VulnerableDependency(),
@@ -53,9 +51,8 @@ __all__ = [
     "HEURISTICS_BY_NAME",
     "InsecureEndpoint",
     "OrphanedEcrRepo",
-    "OutputType",
+    "TerminalAction",
     "UnlinkedDockerfile",
-    "UnlinkedOrmModel",
     "UnlinkedS3Code",
     "VulnerableDependency",
     "gather_all_candidates",

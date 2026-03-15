@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 from src.agent.candidates import CandidateResult, filter_already_evaluated
@@ -23,7 +25,7 @@ def print_candidates(candidates: list) -> None:
     print(f"Candidates ({len(candidates)}):\n")
     for i, c in enumerate(candidates, 1):
         print(f"  {i}. [{c.heuristic_name}] {c.source_urn}")
-        print(f"     output_type: {c.output_type}")
+        print(f"     actions: {', '.join(c.terminal_actions)}")
         if c.skill_file:
             print(f"     skill:  {c.skill_file}")
         print()
@@ -47,6 +49,9 @@ async def run_discovery(
     graph_path = project_dir / "graph.json"
     store = GraphStore(str(graph_path))
 
+    run_id = str(uuid.uuid4())
+    started_at = datetime.now(UTC).isoformat()
+
     try:
         candidates = gather_all_candidates(store, heuristic_names=heuristic_names)
         logger.info("Gathered %d raw candidates", len(candidates))
@@ -64,7 +69,7 @@ async def run_discovery(
 
         results = await emit_all(candidates, store, project_dir)
 
-        report_path = save_report(results, project_dir)
+        report_path = save_report(results, project_dir, run_id=run_id, started_at=started_at)
         print(format_report(results))
         print(f"\nFull report saved to {report_path}")
 

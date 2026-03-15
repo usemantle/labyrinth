@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from src.mcp.graph_store import GraphStore
 
@@ -15,7 +15,7 @@ class Candidate:
     source_node_type: str
     source_metadata: dict
     heuristic_name: str
-    output_type: str
+    terminal_actions: list[str]
     skill_file: str
 
 
@@ -25,8 +25,11 @@ class CandidateResult:
 
     candidate: Candidate
     outcome: str  # "linked", "rejected", "error"
-    soft_link_id: str | None
     note: str
+    actions: list = field(default_factory=list)  # list[CapturedAction]
+    agent_summary: str = ""
+    soft_link_id: str | None = None
+    links_evaluated: list[dict] | None = None
 
 
 def filter_already_evaluated(candidates: list[Candidate], store: GraphStore) -> list[Candidate]:

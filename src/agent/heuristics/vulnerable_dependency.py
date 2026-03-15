@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.agent.heuristics._base import BaseHeuristic, OutputType
+from src.agent.heuristics._base import BaseHeuristic, TerminalAction
 from src.graph.graph_models import NodeMetadataKey, NodeType
 
 
@@ -10,7 +10,7 @@ class VulnerableDependency(BaseHeuristic):
     name = "vulnerable_dependency"
     source_node_type = NodeType.DEPENDENCY
     metadata_key = NodeMetadataKey.CVE_IDS
-    output_type = OutputType.REMEDIATION
+    terminal_actions = [TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_PR]
     skill_file = "remediate-vulnerable-dependency.md"
 
     @classmethod

@@ -47,14 +47,3 @@ Assign a risk level based on the combination of factors:
   present but endpoint is not deployed
 - **LOW** — No significant vulnerability patterns detected, or endpoint is internal-only
 
-## Output
-
-After completing the investigation, call `update_node_metadata` with:
-```
-update_node_metadata(
-    urn=<endpoint_function_urn>,
-    metadata='{"insecure_endpoint_last_evaluated_at": "<ISO timestamp>", "insecure_endpoint_risk": "<CRITICAL|HIGH|MEDIUM|LOW>", "insecure_endpoint_finding": "<brief description of finding>"}'
-)
-```
-
-Always set `insecure_endpoint_last_evaluated_at` even if no vulnerability is found.

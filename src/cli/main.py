@@ -330,8 +330,9 @@ def mcp(graph_path: Path | None) -> None:
 
 @cli.command()
 @click.option("--port", default=8787, show_default=True, help="Port for the local HTTP server.")
-def visualize(port: int) -> None:
-    """Launch an interactive graph visualization in the browser."""
+def serve(port: int) -> None:
+    """Launch the Labyrinth dashboard: graph visualization and agent actions."""
+    import json
     import shutil
     import webbrowser
     from functools import partial
@@ -346,22 +347,29 @@ def visualize(port: int) -> None:
             f"No graph.json found for project '{project}'. Run 'labyrinth scan' first."
         )
 
-    # Resolve the bundled visualize/ directory relative to this source file.
-    viz_src = Path(__file__).resolve().parent / "visualize"
-    if not viz_src.exists():
-        raise click.ClickException(f"Visualization template not found at {viz_src}")
+    # Resolve the bundled serve/ directory relative to this source file.
+    serve_src = Path(__file__).resolve().parent / "serve"
+    if not serve_src.exists():
+        raise click.ClickException(f"Dashboard template not found at {serve_src}")
 
     # Stage files in a temporary serving directory.
-    staging_dir = project_dir / ".visualize"
+    staging_dir = project_dir / ".serve"
     staging_dir.mkdir(exist_ok=True)
-    shutil.copytree(viz_src, staging_dir, dirs_exist_ok=True)
+    shutil.copytree(serve_src, staging_dir, dirs_exist_ok=True)
     shutil.copy2(graph_path, staging_dir / "graph_data.json")
+
+    # Copy reports.json (or write empty default)
+    reports_path = project_dir / "reports.json"
+    if reports_path.exists():
+        shutil.copy2(reports_path, staging_dir / "reports.json")
+    else:
+        (staging_dir / "reports.json").write_text(json.dumps({"runs": []}, indent=2) + "\n")
 
     handler = partial(SimpleHTTPRequestHandler, directory=str(staging_dir))
     server = HTTPServer(("localhost", port), handler)
 
     url = f"http://localhost:{port}/index.html"
-    click.echo(f"Serving graph visualization at {url}")
+    click.echo(f"Serving Labyrinth dashboard at {url}")
     click.echo("Press Ctrl+C to stop.")
     webbrowser.open(url)
 
@@ -388,7 +396,8 @@ def _build_heuristic_help() -> str:
     lines = ["Run the discovery agent.", "", "\b", "Available heuristics:"]
     max_name = max(len(h.name) for h in ALL_HEURISTICS)
     for h in sorted(ALL_HEURISTICS, key=lambda h: h.name):
-        lines.append(f"  {h.name:<{max_name}}  ({h.output_type})")
+        actions = ", ".join(str(a) for a in h.terminal_actions)
+        lines.append(f"  {h.name:<{max_name}}  [{actions}]")
     return "\n".join(lines)
 
 

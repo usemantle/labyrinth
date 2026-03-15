@@ -15,7 +15,7 @@ def _make_candidate(source_urn: str, heuristic_name: str = "test") -> Candidate:
         source_node_type="file",
         source_metadata={},
         heuristic_name=heuristic_name,
-        output_type="soft_link",
+        terminal_actions=["mark_evaluated"],
         skill_file="",
     )
 

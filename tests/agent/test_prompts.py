@@ -33,7 +33,7 @@ class TestBuildSystemPrompt:
 
     def test_contains_rules(self):
         prompt = build_system_prompt()
-        assert "add_soft_link" in prompt
+        assert "post-investigation actions" in prompt
         assert "evidence" in prompt
 
 
@@ -44,7 +44,7 @@ class TestBuildInvestigationPrompt:
             source_node_type="file",
             source_metadata={"dockerfile_base_images": ["python:3.12"]},
             heuristic_name="unlinked_dockerfile",
-            output_type="soft_link",
+            terminal_actions=["mark_evaluated", "create_soft_link"],
             skill_file="",
         )
         ecr_node = {
@@ -71,7 +71,7 @@ class TestBuildInvestigationPrompt:
             source_node_type="function",
             source_metadata={"aws_s3_operations": ["put_object"]},
             heuristic_name="unlinked_s3_code",
-            output_type="soft_link",
+            terminal_actions=["mark_evaluated", "create_soft_link"],
             skill_file="",
         )
         node = {"urn": "urn:test", "node_type": "function", "metadata": {}}
@@ -82,13 +82,13 @@ class TestBuildInvestigationPrompt:
         finally:
             store.stop_watcher()
 
-    def test_soft_link_output_includes_instructions(self):
+    def test_soft_link_action_includes_instructions(self):
         candidate = Candidate(
             source_urn="urn:test",
             source_node_type="file",
             source_metadata={},
             heuristic_name="unlinked_dockerfile",
-            output_type="soft_link",
+            terminal_actions=["mark_evaluated", "create_soft_link"],
             skill_file="",
         )
         node = {"urn": "urn:test", "node_type": "file", "metadata": {}}
@@ -100,13 +100,31 @@ class TestBuildInvestigationPrompt:
         finally:
             store.stop_watcher()
 
+    def test_create_pr_action_includes_instructions(self):
+        candidate = Candidate(
+            source_urn="urn:test",
+            source_node_type="dependency",
+            source_metadata={},
+            heuristic_name="vulnerable_dependency",
+            terminal_actions=["mark_evaluated", "create_pr"],
+            skill_file="",
+        )
+        node = {"urn": "urn:test", "node_type": "dependency", "metadata": {}}
+        store = _make_store([node])
+        try:
+            prompt = build_investigation_prompt(candidate, store)
+            assert "update_node_metadata" in prompt
+            assert "pull request" in prompt
+        finally:
+            store.stop_watcher()
+
     def test_embeds_skill_file(self):
         candidate = Candidate(
             source_urn="urn:test",
             source_node_type="file",
             source_metadata={},
             heuristic_name="unlinked_dockerfile",
-            output_type="soft_link",
+            terminal_actions=["mark_evaluated", "create_soft_link"],
             skill_file="link-dockerfile-to-ecr.md",
         )
         node = {"urn": "urn:test", "node_type": "file", "metadata": {}}
@@ -115,5 +133,22 @@ class TestBuildInvestigationPrompt:
             prompt = build_investigation_prompt(candidate, store)
             assert "Investigation playbook" in prompt
             assert "Link Dockerfile to ECR" in prompt
+        finally:
+            store.stop_watcher()
+
+    def test_actions_shown_in_candidate_section(self):
+        candidate = Candidate(
+            source_urn="urn:test",
+            source_node_type="file",
+            source_metadata={},
+            heuristic_name="unlinked_dockerfile",
+            terminal_actions=["mark_evaluated", "create_soft_link"],
+            skill_file="",
+        )
+        node = {"urn": "urn:test", "node_type": "file", "metadata": {}}
+        store = _make_store([node])
+        try:
+            prompt = build_investigation_prompt(candidate, store)
+            assert "mark_evaluated, create_soft_link" in prompt
         finally:
             store.stop_watcher()

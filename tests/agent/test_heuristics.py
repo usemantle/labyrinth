@@ -11,11 +11,11 @@ from src.agent.heuristics import (
     InsecureEndpoint,
     OrphanedEcrRepo,
     UnlinkedDockerfile,
-    UnlinkedOrmModel,
     UnlinkedS3Code,
     VulnerableDependency,
     gather_all_candidates,
 )
+from src.agent.heuristics._base import TerminalAction
 from src.mcp.graph_store import GraphStore
 
 
@@ -68,19 +68,6 @@ def function_with_s3():
     }
 
 
-@pytest.fixture
-def orm_class():
-    return {
-        "urn": "urn:github:repo:org:::org/app/src/models.py::User",
-        "node_type": "class",
-        "metadata": {
-            "class_name": "User",
-            "orm_table": "users",
-            "orm_framework": "sqlalchemy",
-        },
-    }
-
-
 class TestUnlinkedDockerfile:
     heuristic = UnlinkedDockerfile()
 
@@ -110,6 +97,12 @@ class TestUnlinkedDockerfile:
         instructions = UnlinkedDockerfile.get_instructions()
         assert "Dockerfile" in instructions
         assert "builds" in instructions
+
+    def test_terminal_actions(self):
+        assert self.heuristic.terminal_actions == [
+            TerminalAction.MARK_EVALUATED,
+            TerminalAction.CREATE_SOFT_LINK,
+        ]
 
 
 class TestUnlinkedS3Code:
@@ -141,35 +134,11 @@ class TestUnlinkedS3Code:
         assert "S3" in instructions
         assert "aws_s3_operations" in instructions
 
-
-class TestUnlinkedOrmModel:
-    heuristic = UnlinkedOrmModel()
-
-    def test_returns_orm_class_without_models_edge(self, orm_class):
-        store = _make_store([orm_class])
-        try:
-            candidates = self.heuristic.find(store)
-            assert len(candidates) == 1
-            assert candidates[0].heuristic_name == "unlinked_orm_model"
-        finally:
-            store.stop_watcher()
-
-    def test_ignores_non_orm_classes(self):
-        node = {
-            "urn": "urn:github:repo:org:::org/app/src/utils.py::Helper",
-            "node_type": "class",
-            "metadata": {"class_name": "Helper"},
-        }
-        store = _make_store([node])
-        try:
-            assert self.heuristic.find(store) == []
-        finally:
-            store.stop_watcher()
-
-    def test_get_instructions(self):
-        instructions = UnlinkedOrmModel.get_instructions()
-        assert "orm_table" in instructions
-        assert "models" in instructions
+    def test_terminal_actions(self):
+        assert self.heuristic.terminal_actions == [
+            TerminalAction.MARK_EVALUATED,
+            TerminalAction.CREATE_SOFT_LINK,
+        ]
 
 
 class TestOrphanedEcrRepo:
@@ -196,6 +165,12 @@ class TestOrphanedEcrRepo:
         assert "ECR" in instructions
         assert "builds" in instructions
 
+    def test_terminal_actions(self):
+        assert self.heuristic.terminal_actions == [
+            TerminalAction.MARK_EVALUATED,
+            TerminalAction.CREATE_SOFT_LINK,
+        ]
+
 
 class TestInsecureEndpoint:
     heuristic = InsecureEndpoint()
@@ -215,7 +190,7 @@ class TestInsecureEndpoint:
             candidates = self.heuristic.find(store)
             assert len(candidates) == 1
             assert candidates[0].heuristic_name == "insecure_endpoint"
-            assert candidates[0].output_type == "remediation"
+            assert "create_pr" in candidates[0].terminal_actions
         finally:
             store.stop_watcher()
 
@@ -248,6 +223,12 @@ class TestInsecureEndpoint:
         finally:
             store.stop_watcher()
 
+    def test_terminal_actions(self):
+        assert self.heuristic.terminal_actions == [
+            TerminalAction.MARK_EVALUATED,
+            TerminalAction.CREATE_PR,
+        ]
+
 
 class TestVulnerableDependency:
     heuristic = VulnerableDependency()
@@ -267,7 +248,7 @@ class TestVulnerableDependency:
             candidates = self.heuristic.find(store)
             assert len(candidates) == 1
             assert candidates[0].heuristic_name == "vulnerable_dependency"
-            assert candidates[0].output_type == "remediation"
+            assert "create_pr" in candidates[0].terminal_actions
         finally:
             store.stop_watcher()
 
@@ -286,9 +267,15 @@ class TestVulnerableDependency:
         finally:
             store.stop_watcher()
 
+    def test_terminal_actions(self):
+        assert self.heuristic.terminal_actions == [
+            TerminalAction.MARK_EVALUATED,
+            TerminalAction.CREATE_PR,
+        ]
+
 
 class TestGatherAll:
-    def test_combines_all_heuristics(self, dockerfile_node, ecr_node, function_with_s3, orm_class):
+    def test_combines_all_heuristics(self, dockerfile_node, ecr_node, function_with_s3):
         # Add nodes for the new heuristics too
         unauthenticated_endpoint = {
             "urn": "urn:github:repo:org:::org/app/src/main.py::get_file",
@@ -309,7 +296,7 @@ class TestGatherAll:
             },
         }
         store = _make_store([
-            dockerfile_node, ecr_node, function_with_s3, orm_class,
+            dockerfile_node, ecr_node, function_with_s3,
             unauthenticated_endpoint, vulnerable_dep,
         ])
         try:
@@ -317,7 +304,6 @@ class TestGatherAll:
             heuristic_names = {c.heuristic_name for c in candidates}
             assert "unlinked_dockerfile" in heuristic_names
             assert "unlinked_s3_code" in heuristic_names
-            assert "unlinked_orm_model" in heuristic_names
             assert "orphaned_ecr_repo" in heuristic_names
             assert "insecure_endpoint" in heuristic_names
             assert "vulnerable_dependency" in heuristic_names

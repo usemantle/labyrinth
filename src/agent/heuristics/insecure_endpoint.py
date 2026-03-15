@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from src.agent.candidates import Candidate
-from src.agent.heuristics._base import BaseHeuristic, OutputType
+from src.agent.heuristics._base import BaseHeuristic, TerminalAction
 from src.graph.graph_models import NodeMetadataKey, NodeType
 from src.mcp.graph_store import GraphStore
 
@@ -12,7 +12,7 @@ class InsecureEndpoint(BaseHeuristic):
     name = "insecure_endpoint"
     source_node_type = NodeType.FUNCTION
     metadata_key = NodeMetadataKey.HTTP_METHOD
-    output_type = OutputType.REMEDIATION
+    terminal_actions = [TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_PR]
     skill_file = "detect-insecure-endpoint.md"
 
     def find(self, store: GraphStore) -> list[Candidate]:
@@ -31,7 +31,7 @@ class InsecureEndpoint(BaseHeuristic):
                         source_node_type=self.source_node_type,
                         source_metadata=dict(meta),
                         heuristic_name=self.name,
-                        output_type=self.output_type,
+                        terminal_actions=[str(a) for a in self.terminal_actions],
                         skill_file=self.skill_file,
                     )
                 )

@@ -324,10 +324,47 @@ async function main() {
       document.getElementById("sidebar").classList.toggle("collapsed");
       document.getElementById("toggle-btn").classList.toggle("shifted");
     });
+
+    // Tab switching
+    setupTabs();
   } catch (err) {
     console.error("[labyrinth] main() error:", err);
     document.getElementById("stats").textContent = "Error: " + err.message;
   }
+}
+
+function setupTabs() {
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  const tabContents = {
+    graph: document.getElementById("tab-graph"),
+    actions: document.getElementById("tab-actions"),
+  };
+
+  tabBtns.forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const tab = btn.dataset.tab;
+
+      // Update active tab button
+      tabBtns.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      // Toggle tab content
+      Object.values(tabContents).forEach((el) => el.classList.remove("active"));
+      if (tabContents[tab]) tabContents[tab].classList.add("active");
+
+      // Lazy-load dashboard on first actions tab click
+      if (tab === "actions" && !state._dashboardLoaded) {
+        state._dashboardLoaded = true;
+        const { initDashboard } = await import("./dashboard.js");
+        initDashboard();
+      }
+
+      // Refresh Sigma when returning to graph tab
+      if (tab === "graph" && state.sigma) {
+        state.sigma.refresh();
+      }
+    });
+  });
 }
 
 main();

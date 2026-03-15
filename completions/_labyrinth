@@ -1,7 +1,7 @@
 #compdef labyrinth
 #
 # Zsh completion script for the labyrinth CLI.
-# Commands: init, set-active, add-target, describe, remove-target, add-plugin, scan, mcp, visualize, agent (run), config (list, get, set)
+# Commands: init, set-active, add-target, describe, remove-target, add-plugin, scan, mcp, serve, agent (run), config (list, get, set)
 #
 # Installation:
 #   Option 1: Source directly in your .zshrc:
