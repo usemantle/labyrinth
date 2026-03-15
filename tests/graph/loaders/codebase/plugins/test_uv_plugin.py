@@ -7,10 +7,11 @@ from unittest.mock import patch
 
 from mcp.server.fastmcp import FastMCP
 
-from src.graph.graph_models import NodeMetadataKey
+from src.graph.graph_models import NodeMetadataKey, NodeType
 from src.graph.loaders.codebase.cve.osv_client import OsvResult
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 from src.graph.loaders.codebase.plugins import UvPlugin
+from src.graph.sinks.json_file_sink import classify_node
 from src.mcp.graph_store import GraphStore
 from src.mcp.tools.security import register
 
@@ -102,6 +103,13 @@ def _find_dep(nodes, name):
     return None
 
 
+def _find_manifest(nodes):
+    for n in nodes:
+        if n.node_type == NodeType.PACKAGE_MANIFEST:
+            return n
+    return None
+
+
 @patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_package_node_creation(mock_osv, tmp_path):
     mock_osv.return_value = OsvResult()
@@ -119,18 +127,57 @@ def test_package_node_creation(mock_osv, tmp_path):
 
 
 @patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
-def test_contains_edges(mock_osv, tmp_path):
+def test_manifest_node_created(mock_osv, tmp_path):
+    """A package_manifest node is created to represent the lockfile."""
+    mock_osv.return_value = OsvResult()
+    repo = _make_repo(tmp_path)
+    nodes, edges = _load(repo)
+
+    manifest = _find_manifest(nodes)
+    assert manifest is not None
+    assert manifest.metadata[NK.PACKAGE_MANAGER] == "uv"
+    assert manifest.metadata[NK.MANIFEST_FILE] == "uv.lock"
+
+    # Codebase contains the manifest
+    contains_to_manifest = [
+        e for e in edges
+        if e.edge_type == "contains" and e.to_urn == manifest.urn
+    ]
+    assert len(contains_to_manifest) == 1
+
+
+@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+def test_manifest_depends_on_dependencies(mock_osv, tmp_path):
+    """The manifest node has depends_on edges to each dependency."""
+    mock_osv.return_value = OsvResult()
+    repo = _make_repo(tmp_path)
+    nodes, edges = _load(repo)
+
+    manifest = _find_manifest(nodes)
+    req = _find_dep(nodes, "requests")
+
+    depends_on_edges = [
+        e for e in edges
+        if e.edge_type == "depends_on"
+        and e.from_urn == manifest.urn
+        and e.to_urn == req.urn
+    ]
+    assert len(depends_on_edges) == 1
+
+
+@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+def test_no_contains_edge_to_dependency(mock_osv, tmp_path):
+    """Dependencies should NOT have contains edges from the codebase."""
     mock_osv.return_value = OsvResult()
     repo = _make_repo(tmp_path)
     nodes, edges = _load(repo)
 
     req = _find_dep(nodes, "requests")
-    contains_edges = [
+    contains_to_dep = [
         e for e in edges
-        if e.edge_type == "contains"
-        and e.to_urn == req.urn
+        if e.edge_type == "contains" and e.to_urn == req.urn
     ]
-    assert len(contains_edges) == 1
+    assert len(contains_to_dep) == 0
 
 
 @patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
@@ -231,13 +278,16 @@ def test_transitive_chain_depth(mock_osv, tmp_path):
 
 @patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_no_transitive_edges_without_dependencies(mock_osv, tmp_path):
-    """Packages without a dependencies field produce no DEPENDS_ON edges."""
+    """Packages without a dependencies field produce no transitive DEPENDS_ON edges."""
     mock_osv.return_value = OsvResult()
     repo = _make_repo(tmp_path, lock_content=LOCK_CONTENT)
     nodes, edges = _load(repo)
 
+    # Only manifest → dep edges, no dep → dep edges
+    manifest = _find_manifest(nodes)
     dep_edges = [e for e in edges if e.edge_type == "depends_on"]
-    assert dep_edges == []
+    # All depends_on edges should be from the manifest
+    assert all(e.from_urn == manifest.urn for e in dep_edges)
 
 
 @patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
@@ -263,10 +313,7 @@ def test_transitive_cve_reachable_via_blast_radius(mock_osv, tmp_path):
                 "urn": str(n.urn),
                 "organization_id": str(n.organization_id),
                 "parent_urn": str(n.parent_urn) if n.parent_urn else None,
-                "node_type": n.metadata.get(NK.PACKAGE_NAME) and "dependency"
-                    or n.metadata.get(NK.FILE_PATH) and "file"
-                    or n.metadata.get(NK.FUNCTION_NAME) and "function"
-                    or "codebase",
+                "node_type": classify_node(n),
                 "metadata": dict(n.metadata.items()),
             }
             for n in nodes
@@ -282,6 +329,7 @@ def test_transitive_cve_reachable_via_blast_radius(mock_osv, tmp_path):
             }
             for e in edges
         ],
+        "soft_links": [],
     }
     with open(graph_path, "w") as f:
         json.dump(graph_data, f)

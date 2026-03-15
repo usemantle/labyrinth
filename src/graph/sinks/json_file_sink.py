@@ -42,6 +42,8 @@ def classify_node(node: Node) -> str:
         return NodeType.S3_OBJECT
     if NK.BUCKET_NAME in m:
         return NodeType.S3_BUCKET
+    if NK.PACKAGE_MANAGER in m:
+        return NodeType.PACKAGE_MANIFEST
     if NK.PACKAGE_NAME in m:
         return NodeType.DEPENDENCY
     if NK.ROLE_NAME in m:

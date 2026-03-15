@@ -1,9 +1,9 @@
 """UV lockfile plugin for dependency scanning and CVE detection.
 
-Reads ``uv.lock`` (TOML format) from the codebase root, creates a node
-for each package with PACKAGE_NAME, PACKAGE_VERSION, and
-PACKAGE_ECOSYSTEM metadata, links them via CONTAINS edges to the
-codebase root, and queries OSV.dev for known vulnerabilities.
+Reads ``uv.lock`` (TOML format) from the codebase root, creates a
+package_manifest node for the lockfile, then creates dependency nodes
+linked via DEPENDS_ON edges from the manifest.  The codebase CONTAINS
+the manifest, and the manifest DEPENDS_ON each dependency.
 
 Also creates DEPENDS_ON edges between dependency nodes based on the
 ``dependencies`` field in each package entry, enabling transitive
@@ -21,7 +21,9 @@ from src.graph.edges.depends_on_edge import DependsOnEdge
 from src.graph.graph_models import (
     Edge,
     Node,
+    NodeMetadata,
     NodeMetadataKey,
+    NodeType,
 )
 from src.graph.loaders.codebase.cve.osv_client import query_osv
 from src.graph.loaders.codebase.plugins._base import CodebasePlugin
@@ -31,6 +33,8 @@ if TYPE_CHECKING:
     from src.graph.loaders.codebase.codebase_loader import PostProcessContext
 
 logger = logging.getLogger(__name__)
+
+NK = NodeMetadataKey
 
 
 class UvPlugin(CodebasePlugin):
@@ -71,6 +75,26 @@ class UvPlugin(CodebasePlugin):
         new_nodes: list[Node] = []
         new_edges: list[Edge] = []
 
+        # Create the package manifest node (represents uv.lock)
+        manifest_urn = context.build_urn(context.root_name, "uv.lock")
+        manifest_node = Node(
+            organization_id=context.organization_id,
+            urn=manifest_urn,
+            parent_urn=codebase_urn,
+            node_type=NodeType.PACKAGE_MANIFEST,
+            metadata=NodeMetadata({
+                NK.PACKAGE_MANAGER: "uv",
+                NK.MANIFEST_FILE: "uv.lock",
+                NK.PACKAGE_ECOSYSTEM: "PyPI",
+            }),
+        )
+        new_nodes.append(manifest_node)
+        new_edges.append(ContainsEdge.create(
+            context.organization_id,
+            codebase_urn,
+            manifest_urn,
+        ))
+
         for pkg in packages:
             name = pkg.get("name", "")
             version = pkg.get("version", "")
@@ -82,7 +106,7 @@ class UvPlugin(CodebasePlugin):
             dep_node = DependencyNode.create(
                 organization_id=context.organization_id,
                 urn=dep_urn,
-                parent_urn=codebase_urn,
+                parent_urn=manifest_urn,
                 package_name=name,
                 package_version=version,
                 package_ecosystem="PyPI",
@@ -92,14 +116,14 @@ class UvPlugin(CodebasePlugin):
             try:
                 result = query_osv(name, version, "PyPI")
                 if result.cve_ids:
-                    dep_node.metadata[NodeMetadataKey.CVE_IDS] = ",".join(result.cve_ids)
+                    dep_node.metadata[NK.CVE_IDS] = ",".join(result.cve_ids)
             except Exception:
                 logger.debug("OSV query failed for %s==%s", name, version)
 
             new_nodes.append(dep_node)
-            new_edges.append(ContainsEdge.create(
+            new_edges.append(DependsOnEdge.create(
                 context.organization_id,
-                codebase_urn,
+                manifest_urn,
                 dep_urn,
             ))
 
@@ -129,6 +153,7 @@ class UvPlugin(CodebasePlugin):
 
         logger.info(
             "UV plugin: found %d packages, %d transitive dependency edges",
-            len(new_nodes), transitive_count,
+            len(new_nodes) - 1,  # subtract manifest node
+            transitive_count,
         )
         return nodes + new_nodes, edges + new_edges

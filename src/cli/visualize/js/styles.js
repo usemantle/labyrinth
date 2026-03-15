@@ -21,6 +21,7 @@ export const NODE_STYLES = {
   file:       { color: "#10b981", size: 7  },
   class:      { color: "#84cc16", size: 10 },
   function:   { color: "#14b8a6", size: 6  },
+  package_manifest: { color: "#0891b2", size: 10 },
   dependency: { color: "#06b6d4", size: 8  },
 
   // Data (blue/indigo)
@@ -73,7 +74,7 @@ export const DOMAIN_GROUPS = {
     "s3_bucket", "s3_prefix", "s3_object", "image_repository", "image",
   ],
   "Code": [
-    "codebase", "file", "class", "function", "dependency",
+    "codebase", "file", "class", "function", "package_manifest", "dependency",
   ],
   "Data": [
     "database", "schema", "table", "column", "rds_cluster",

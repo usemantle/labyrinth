@@ -14,6 +14,7 @@ class NodeType(enum.StrEnum):
     FILE = "file"
     CLASS = "class"
     FUNCTION = "function"
+    PACKAGE_MANIFEST = "package_manifest"
     DEPENDENCY = "dependency"
 
     # Data
@@ -150,6 +151,8 @@ class NodeMetadataKey(enum.StrEnum):
     ROLE_SUPERUSER = "role_superuser"
 
     # ── Dependency management ────────────────────────────────────────
+    PACKAGE_MANAGER = "package_manager"
+    MANIFEST_FILE = "manifest_file"
     PACKAGE_NAME = "package_name"
     PACKAGE_VERSION = "package_version"
     PACKAGE_ECOSYSTEM = "package_ecosystem"
