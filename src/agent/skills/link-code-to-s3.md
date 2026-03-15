@@ -55,6 +55,17 @@ runtime.
    )
    ```
 
+8. **Mark evaluation complete:**
+   After completing the investigation (whether or not you created a soft link),
+   mark the node as evaluated so it is not re-investigated:
+   ```
+   update_node_metadata(
+       urn=<function_urn>,
+       metadata='{"<heuristic_name>_last_evaluated_at": "<current ISO timestamp>"}'
+   )
+   ```
+   The `heuristic_name` is provided in the investigation prompt.
+
 ## Important
 - Create **one edge per function-to-bucket relationship**, using the most specific edge type (reads, writes, or references).
 - If a function both reads and writes to the same bucket, create two separate edges.

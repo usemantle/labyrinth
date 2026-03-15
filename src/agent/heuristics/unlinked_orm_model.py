@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 from src.agent.heuristics._base import BaseHeuristic
-from src.graph.graph_models import EdgeType, NodeType
+from src.graph.graph_models import NodeType
 
 
 class UnlinkedOrmModel(BaseHeuristic):
     name = "unlinked_orm_model"
     source_node_type = NodeType.CLASS
     metadata_key = "orm_table"
-    target_edge_type = EdgeType.MODELS
-    target_node_type = NodeType.TABLE
 
     @classmethod
     def get_instructions(cls) -> str:

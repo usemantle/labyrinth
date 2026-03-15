@@ -23,6 +23,7 @@ def _make_store(nodes: list[dict], edges: list[dict] | None = None) -> GraphStor
         "generated_at": "2024-01-01T00:00:00Z",
         "nodes": nodes,
         "edges": edges or [],
+        "soft_links": [],
     }
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(data, f)
@@ -88,7 +89,6 @@ class TestUnlinkedDockerfile:
             assert len(candidates) == 1
             assert candidates[0].source_urn == dockerfile_node["urn"]
             assert candidates[0].heuristic_name == "unlinked_dockerfile"
-            assert candidates[0].target_edge_type == "builds"
         finally:
             store.stop_watcher()
 
@@ -119,7 +119,6 @@ class TestUnlinkedS3Code:
             candidates = self.heuristic.find(store)
             assert len(candidates) == 1
             assert candidates[0].heuristic_name == "unlinked_s3_code"
-            assert candidates[0].target_edge_type == "writes"
         finally:
             store.stop_watcher()
 
@@ -150,7 +149,6 @@ class TestUnlinkedOrmModel:
             candidates = self.heuristic.find(store)
             assert len(candidates) == 1
             assert candidates[0].heuristic_name == "unlinked_orm_model"
-            assert candidates[0].target_edge_type == "models"
         finally:
             store.stop_watcher()
 
@@ -181,7 +179,6 @@ class TestOrphanedEcrRepo:
             candidates = self.heuristic.find(store)
             assert len(candidates) == 1
             assert candidates[0].heuristic_name == "orphaned_ecr_repo"
-            assert candidates[0].target_node_type == "file"
         finally:
             store.stop_watcher()
 

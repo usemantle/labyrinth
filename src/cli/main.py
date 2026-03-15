@@ -357,12 +357,6 @@ def visualize(port: int) -> None:
     shutil.copytree(viz_src, staging_dir, dirs_exist_ok=True)
     shutil.copy2(graph_path, staging_dir / "graph_data.json")
 
-    soft_links_path = project_dir / "soft_links.json"
-    if soft_links_path.exists():
-        shutil.copy2(soft_links_path, staging_dir / "soft_links.json")
-    else:
-        (staging_dir / "soft_links.json").write_text('{"soft_links": []}')
-
     handler = partial(SimpleHTTPRequestHandler, directory=str(staging_dir))
     server = HTTPServer(("localhost", port), handler)
 

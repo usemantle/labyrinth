@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import enum
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -11,12 +12,16 @@ from src.mcp.graph_store import GraphStore
 SKILL_DIR = Path(__file__).resolve().parent.parent / "skills"
 
 
+class OutputType(enum.StrEnum):
+    SOFT_LINK = "soft_link"       # Agent creates a soft link between nodes
+    REMEDIATION = "remediation"   # Agent evaluates risk, marks findings, creates PR
+
+
 class BaseHeuristic(ABC):
-    """A heuristic detects candidate nodes that are missing a soft link.
+    """A heuristic detects candidate nodes worth investigating.
 
     Subclasses define what to look for (source node type, metadata key),
-    what edge to create (target edge/node type), and how to investigate
-    (instructions + optional playbook).
+    the output type, and how to investigate (instructions + optional playbook).
 
     The default ``find()`` implementation covers the common pattern:
     iterate all nodes of ``source_node_type``, check for ``metadata_key``
@@ -31,10 +36,8 @@ class BaseHeuristic(ABC):
     source_node_type: str  # e.g. "file", "function", "class"
     metadata_key: str  # metadata key whose presence triggers this heuristic
 
-    # ── What edge to create ──
-    target_edge_type: str  # e.g. "builds", "writes", "models"
-    target_node_type: str  # e.g. "image_repository", "s3_bucket", "table"
-    edge_direction: str = "outgoing"
+    # ── Output type ──
+    output_type: OutputType = OutputType.SOFT_LINK
 
     # ── Skill file (optional) ──
     skill_file: str = ""
@@ -57,10 +60,8 @@ class BaseHeuristic(ABC):
                         source_node_type=self.source_node_type,
                         source_metadata=dict(meta),
                         heuristic_name=self.name,
-                        target_edge_type=self.target_edge_type,
-                        target_node_type=self.target_node_type,
+                        output_type=self.output_type,
                         skill_file=self.skill_file,
-                        edge_direction=self.edge_direction,
                     )
                 )
         return candidates
@@ -68,12 +69,7 @@ class BaseHeuristic(ABC):
     @classmethod
     @abstractmethod
     def get_instructions(cls) -> str:
-        """Return investigation instructions for the agent.
-
-        This tells the agent what to look for, how to gather evidence,
-        and how to decide confidence levels when investigating this
-        candidate type.
-        """
+        """Return investigation instructions for the agent."""
 
     def get_playbook(self) -> str | None:
         """Return the skill file content, or None if no skill file is set."""

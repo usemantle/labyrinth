@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from src.agent.candidates import CandidateResult, filter_already_linked
+from src.agent.candidates import CandidateResult, filter_already_evaluated
 from src.agent.emitter import emit_all
 from src.agent.heuristics import gather_all_candidates
 from src.agent.report import format_report, save_report
@@ -23,7 +23,7 @@ def print_candidates(candidates: list) -> None:
     print(f"Candidates ({len(candidates)}):\n")
     for i, c in enumerate(candidates, 1):
         print(f"  {i}. [{c.heuristic_name}] {c.source_urn}")
-        print(f"     target: {c.target_edge_type} → {c.target_node_type}")
+        print(f"     output_type: {c.output_type}")
         if c.skill_file:
             print(f"     skill:  {c.skill_file}")
         print()
@@ -38,7 +38,7 @@ async def run_discovery(
 
     1. Load the graph
     2. Gather candidates via heuristics
-    3. Filter out already-linked candidates
+    3. Filter out already-evaluated candidates
     4. (dry_run) Print candidates and return
     5. Emit: invoke Claude agent for each candidate
     6. Save report
@@ -50,7 +50,7 @@ async def run_discovery(
         candidates = gather_all_candidates(store)
         logger.info("Gathered %d raw candidates", len(candidates))
 
-        candidates = filter_already_linked(candidates, store)
+        candidates = filter_already_evaluated(candidates, store)
         logger.info("After filtering: %d candidates", len(candidates))
 
         if dry_run:

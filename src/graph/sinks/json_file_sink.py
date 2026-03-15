@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from src.graph.graph_models import Edge, Node, NodeMetadataKey, NodeType
 from src.graph.sinks.sink import Sink
@@ -76,6 +78,21 @@ class JsonFileSink(Sink):
     def __init__(self, output_path: Path):
         self._output_path = output_path
 
+    def _read(self) -> dict:
+        """Read the current graph JSON from disk."""
+        if not self._output_path.exists():
+            return {"nodes": [], "edges": [], "soft_links": []}
+        with open(self._output_path) as f:
+            return json.load(f)
+
+    def _atomic_write(self, data: dict) -> None:
+        """Write data to disk atomically via a temp file rename."""
+        self._output_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = str(self._output_path) + ".tmp"
+        with open(tmp_path, "w") as f:
+            json.dump(data, f, indent=2, default=str)
+        os.replace(tmp_path, str(self._output_path))
+
     def write(self, nodes: list[Node], edges: list[Edge]) -> None:
         data = {
             "generated_at": datetime.now(UTC).isoformat(),
@@ -83,7 +100,38 @@ class JsonFileSink(Sink):
             "edge_count": len(edges),
             "nodes": [_serialize_node(n) for n in nodes],
             "edges": [_serialize_edge(e) for e in edges],
+            "soft_links": [],
         }
         self._output_path.parent.mkdir(parents=True, exist_ok=True)
         self._output_path.write_text(json.dumps(data, indent=2, default=str))
         logger.info("Graph JSON saved to %s", self._output_path)
+
+    def update_node_metadata(self, urn: str, **kwargs: Any) -> None:
+        data = self._read()
+        for node in data["nodes"]:
+            if node["urn"] == urn:
+                node.setdefault("metadata", {}).update(kwargs)
+                break
+        self._atomic_write(data)
+
+    def delete_node_metadata(self, urn: str, *keys: str) -> None:
+        data = self._read()
+        for node in data["nodes"]:
+            if node["urn"] == urn:
+                meta = node.get("metadata", {})
+                for k in keys:
+                    meta.pop(k, None)
+                break
+        self._atomic_write(data)
+
+    def add_soft_link(self, link: dict) -> None:
+        data = self._read()
+        data.setdefault("soft_links", []).append(link)
+        self._atomic_write(data)
+
+    def remove_soft_link(self, link_id: str) -> None:
+        data = self._read()
+        data["soft_links"] = [
+            sl for sl in data.get("soft_links", []) if sl.get("id") != link_id
+        ]
+        self._atomic_write(data)

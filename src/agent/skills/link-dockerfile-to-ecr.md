@@ -46,6 +46,17 @@ codebase name to the ECR repository name.
    )
    ```
 
+7. **Mark evaluation complete:**
+   After completing the investigation (whether or not you created a soft link),
+   mark the node as evaluated so it is not re-investigated:
+   ```
+   update_node_metadata(
+       urn=<dockerfile_file_urn>,
+       metadata='{"<heuristic_name>_last_evaluated_at": "<current ISO timestamp>"}'
+   )
+   ```
+   The `heuristic_name` is provided in the investigation prompt.
+
 ## Important
 - The `from_urn` must be the **file** node (the Dockerfile), not the codebase node.
 - The `to_urn` must be the **image_repository** node, not an individual image node.

@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 from src.agent.heuristics._base import BaseHeuristic
-from src.graph.graph_models import EdgeType, NodeType
+from src.graph.graph_models import NodeType
 
 
 class UnlinkedDockerfile(BaseHeuristic):
     name = "unlinked_dockerfile"
     source_node_type = NodeType.FILE
     metadata_key = "dockerfile_base_images"
-    target_edge_type = EdgeType.BUILDS
-    target_node_type = NodeType.IMAGE_REPOSITORY
     skill_file = "link-dockerfile-to-ecr.md"
 
     @classmethod

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
 
 from src.agent.candidates import Candidate, CandidateResult
+from src.agent.heuristics._base import OutputType
 from src.agent.prompts import build_investigation_prompt, build_system_prompt
 from src.mcp.graph_store import GraphStore
 
@@ -23,10 +25,26 @@ async def emit_candidate(
     prompt = build_investigation_prompt(candidate, store, project_dir)
     system = build_system_prompt()
 
-    soft_links_before = len(store.soft_links)
     agent_result_text = ""
 
     graph_path = str(project_dir / "graph.json")
+
+    mcp_servers = {
+        "knowledge": {
+            "command": "uv",
+            "args": ["run", "labyrinth", "mcp", "--graph-path", graph_path],
+        },
+    }
+    if candidate.output_type == OutputType.REMEDIATION:
+        gat = os.environ.get("GITHUB_ACCESS_TOKEN", None)
+        if gat:
+            mcp_servers["github"] = {
+                "type": "http",
+                "url": "https://api.githubcopilot.com/mcp/",
+                "headers": {
+                    "Authorization": f"Bearer {gat}",
+                },
+            }
 
     try:
         async for message in query(
@@ -34,12 +52,7 @@ async def emit_candidate(
             options=ClaudeAgentOptions(
                 cwd=str(project_dir),
                 allowed_tools=["Read", "Grep", "Glob", "Bash"],
-                mcp_servers={
-                    "knowledge": {
-                        "command": "uv",
-                        "args": ["run", "labyrinth", "mcp", "--graph-path", graph_path],
-                    },
-                },
+                mcp_servers=mcp_servers,
                 permission_mode="bypassPermissions",
                 system_prompt=system,
                 model="claude-sonnet-4-6",
@@ -61,23 +74,20 @@ async def emit_candidate(
             note=f"Agent raised an exception for {candidate.source_urn}",
         )
 
-    # Detect outcome by reloading soft links and checking if any were added
+    # Detect outcome by checking if the agent set the evaluation metadata
     store.reload()
-    new_links = store.soft_links[soft_links_before:]
-    if new_links:
-        link_id = new_links[0].get("id", "unknown")
-        return CandidateResult(
-            candidate=candidate,
-            outcome="linked",
-            soft_link_id=link_id,
-            note=new_links[0].get("note", ""),
-        )
+    meta = store.G.nodes[candidate.source_urn].get("metadata", {})
+    eval_key = f"{candidate.heuristic_name}_last_evaluated_at"
+    if eval_key in meta:
+        outcome = "linked"
+    else:
+        outcome = "rejected"
 
     return CandidateResult(
         candidate=candidate,
-        outcome="rejected",
+        outcome=outcome,
         soft_link_id=None,
-        note=agent_result_text or "Agent did not create a soft link (no output).",
+        note=agent_result_text or "Agent did not produce output.",
     )
 
 
@@ -86,10 +96,7 @@ async def emit_all(
     store: GraphStore,
     project_dir: Path,
 ) -> list[CandidateResult]:
-    """Investigate all candidates sequentially.
-
-    Sequential execution because each agent invocation shares soft_links.json.
-    """
+    """Investigate all candidates sequentially."""
     results: list[CandidateResult] = []
     for i, candidate in enumerate(candidates, 1):
         logger.info(

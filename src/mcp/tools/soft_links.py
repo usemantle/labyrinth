@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from mcp.server.fastmcp import FastMCP
 from src.graph.graph_models import EdgeType
 from src.mcp._formatting import _node_label
-from src.mcp.graph_store import EDGE_NAMESPACE, GraphStore
+from src.mcp.graph_store import GraphStore
 
 # Valid edge types that soft links can create.
 SOFT_LINK_EDGE_TYPES = frozenset({
@@ -40,7 +40,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         note: str = "",
     ) -> str:
         """Create an edge between two nodes. The link is persisted to
-        soft_links.json and immediately added to the in-memory graph.
+        graph.json and immediately added to the in-memory graph.
 
         Use this to manually establish relationships that automated
         scanning could not detect (e.g. Dockerfile → ECR repository,
@@ -81,10 +81,6 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                 return f"Error: soft link already exists (id={existing['id']})"
 
         link_id = str(uuid.uuid4())
-        edge_key = str(uuid.uuid5(
-            EDGE_NAMESPACE, f"{from_urn}:{to_urn}:{edge_type}"
-        ))
-        org_id = store.G.nodes[from_urn].get("organization_id")
 
         link = {
             "id": link_id,
@@ -98,22 +94,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             "created_at": datetime.now(UTC).isoformat(),
         }
 
-        store.soft_links.append(link)
-        store.G.add_edge(
-            from_urn, to_urn, key=edge_key,
-            edge_type=edge_type,
-            metadata={
-                "detection_method": "soft_link",
-                "confidence": confidence_score,
-                "confidence_level": confidence_upper,
-                "note": note,
-            },
-            organization_id=org_id,
-        )
-        store.edges_by_type.setdefault(edge_type, []).append(
-            (from_urn, to_urn, edge_key)
-        )
-        store._save_soft_links()
+        store.add_soft_link(link)
 
         from_label = _node_label(store.node_dict(from_urn))
         to_label = _node_label(store.node_dict(to_urn))
@@ -152,7 +133,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
     @mcp.tool()
     def remove_soft_link(soft_link_id: str) -> str:
         """Remove a soft link by its UUID. The edge is removed from the
-        in-memory graph and the change is persisted to soft_links.json.
+        in-memory graph and the change is persisted to graph.json.
 
         Args:
             soft_link_id: UUID of the soft link to remove.
@@ -168,26 +149,12 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
 
         from_urn = target_link["from_urn"]
         to_urn = target_link["to_urn"]
-        edge_type = target_link.get("edge_type", EdgeType.SOFT_REFERENCE)
-        edge_key = str(uuid.uuid5(
-            EDGE_NAMESPACE, f"{from_urn}:{to_urn}:{edge_type}"
-        ))
-
-        if store.G.has_edge(from_urn, to_urn, key=edge_key):
-            store.G.remove_edge(from_urn, to_urn, key=edge_key)
-
-        edge_tuple = (from_urn, to_urn, edge_key)
-        if edge_type in store.edges_by_type:
-            try:
-                store.edges_by_type[edge_type].remove(edge_tuple)
-            except ValueError:
-                pass
-
-        store.soft_links.remove(target_link)
-        store._save_soft_links()
 
         from_node = store.node_dict(from_urn)
         to_node = store.node_dict(to_urn)
         from_label = _node_label(from_node) if from_node else from_urn
         to_label = _node_label(to_node) if to_node else to_urn
+
+        store.remove_soft_link(soft_link_id)
+
         return f"Soft link removed (id={soft_link_id}): {from_label} → {to_label}"

@@ -5,10 +5,13 @@ import logging
 import os
 import threading
 import uuid
+from pathlib import Path
+from typing import Any
 
 import networkx as nx
 
 from src.graph.graph_models import EdgeType, NodeType
+from src.graph.sinks.json_file_sink import JsonFileSink
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +38,12 @@ class GraphStore:
         self.tables_by_name: dict[str, str] = {}         # table_name -> urn
         self.nodes_by_type: dict[str, list[str]] = {}     # node_type -> [urn, ...]
         self.edges_by_type: dict[str, list[tuple[str, str, str]]] = {}  # edge_type -> [(from, to, key), ...]
-        self.soft_links: list[dict] = []
+        self._soft_links: list[dict] = []
         self.generated_at = "unknown"
+
+        self.sink = JsonFileSink(Path(json_path))
+
         self._load(json_path)
-        self._soft_links_path = os.path.join(
-            os.path.dirname(json_path), "soft_links.json"
-        )
-        self._load_soft_links()
 
         # Record mtime after initial load so the watcher doesn't
         # immediately trigger a redundant reload.
@@ -57,6 +59,12 @@ class GraphStore:
         )
         self._watcher.start()
 
+    # ── Properties ────────────────────────────────────────────────────
+
+    @property
+    def soft_links(self) -> list[dict]:
+        return self._soft_links
+
     # ── File watching ────────────────────────────────────────────────
 
     def _watch_loop(self) -> None:
@@ -71,7 +79,7 @@ class GraphStore:
                 self.reload()
 
     def reload(self) -> None:
-        """Re-read the graph JSON and soft links from disk.
+        """Re-read the graph JSON from disk.
 
         Acquires the write lock so that in-flight reads block until
         the new data is fully loaded.
@@ -82,11 +90,10 @@ class GraphStore:
             self.tables_by_name = {}
             self.nodes_by_type = {}
             self.edges_by_type = {}
-            self.soft_links = []
+            self._soft_links = []
             self.generated_at = "unknown"
 
             self._load(self._json_path)
-            self._load_soft_links()
 
             try:
                 self._last_mtime = os.path.getmtime(self._json_path)
@@ -137,21 +144,7 @@ class GraphStore:
                 (edge["from_urn"], edge["to_urn"], key)
             )
 
-        logger.info(
-            "Loaded graph: %d nodes, %d edges",
-            self.G.number_of_nodes(),
-            self.G.number_of_edges(),
-        )
-
-    def _load_soft_links(self):
-        if not os.path.exists(self._soft_links_path):
-            logger.info("No soft_links.json found — skipping")
-            return
-
-        with open(self._soft_links_path) as f:
-            data = json.load(f)
-
-        loaded = 0
+        # Load soft links from the same file
         for link in data.get("soft_links", []):
             from_urn = link["from_urn"]
             to_urn = link["to_urn"]
@@ -181,18 +174,97 @@ class GraphStore:
             self.edges_by_type.setdefault(edge_type, []).append(
                 (from_urn, to_urn, edge_key)
             )
-            self.soft_links.append(link)
-            loaded += 1
+            self._soft_links.append(link)
 
-        logger.info("Loaded %d soft link(s)", loaded)
+        logger.info(
+            "Loaded graph: %d nodes, %d edges, %d soft links",
+            self.G.number_of_nodes(),
+            self.G.number_of_edges(),
+            len(self._soft_links),
+        )
 
-    def _save_soft_links(self):
+    # ── Mutation methods ──────────────────────────────────────────────
+
+    def update_node_metadata(self, urn: str, **kwargs: Any) -> None:
+        """Update metadata on a node in-memory and persist to disk."""
         with self.lock:
-            tmp_path = self._soft_links_path + ".tmp"
-            with open(tmp_path, "w") as f:
-                json.dump({"soft_links": self.soft_links}, f, indent=2)
-                f.write("\n")
-            os.replace(tmp_path, self._soft_links_path)
+            if urn not in self.G:
+                raise KeyError(f"Node not found: {urn}")
+            meta = self.G.nodes[urn].get("metadata", {})
+            meta.update(kwargs)
+            self.G.nodes[urn]["metadata"] = meta
+            self.sink.update_node_metadata(urn, **kwargs)
+
+    def delete_node_metadata(self, urn: str, *keys: str) -> None:
+        """Remove metadata keys from a node in-memory and persist to disk."""
+        with self.lock:
+            if urn not in self.G:
+                raise KeyError(f"Node not found: {urn}")
+            meta = self.G.nodes[urn].get("metadata", {})
+            for k in keys:
+                meta.pop(k, None)
+            self.sink.delete_node_metadata(urn, *keys)
+
+    def add_soft_link(self, link: dict) -> None:
+        """Add a soft link to the in-memory graph and persist to disk."""
+        with self.lock:
+            from_urn = link["from_urn"]
+            to_urn = link["to_urn"]
+            edge_type = link.get("edge_type", EdgeType.READS)
+            edge_key = str(uuid.uuid5(
+                EDGE_NAMESPACE, f"{from_urn}:{to_urn}:{edge_type}"
+            ))
+            org_id = self.G.nodes[from_urn].get("organization_id")
+
+            self.G.add_edge(
+                from_urn, to_urn, key=edge_key,
+                edge_type=edge_type,
+                metadata={
+                    "detection_method": "soft_link",
+                    "confidence": link.get("confidence", 0.7),
+                    "note": link.get("note", ""),
+                },
+                organization_id=org_id,
+            )
+            self.edges_by_type.setdefault(edge_type, []).append(
+                (from_urn, to_urn, edge_key)
+            )
+            self._soft_links.append(link)
+            self.sink.add_soft_link(link)
+
+    def remove_soft_link(self, link_id: str) -> None:
+        """Remove a soft link from the in-memory graph and persist to disk."""
+        with self.lock:
+            target_link = None
+            for link in self._soft_links:
+                if link["id"] == link_id:
+                    target_link = link
+                    break
+
+            if target_link is None:
+                raise KeyError(f"No soft link found with id={link_id}")
+
+            from_urn = target_link["from_urn"]
+            to_urn = target_link["to_urn"]
+            edge_type = target_link.get("edge_type", EdgeType.SOFT_REFERENCE)
+            edge_key = str(uuid.uuid5(
+                EDGE_NAMESPACE, f"{from_urn}:{to_urn}:{edge_type}"
+            ))
+
+            if self.G.has_edge(from_urn, to_urn, key=edge_key):
+                self.G.remove_edge(from_urn, to_urn, key=edge_key)
+
+            edge_tuple = (from_urn, to_urn, edge_key)
+            if edge_type in self.edges_by_type:
+                try:
+                    self.edges_by_type[edge_type].remove(edge_tuple)
+                except ValueError:
+                    pass
+
+            self._soft_links.remove(target_link)
+            self.sink.remove_soft_link(link_id)
+
+    # ── Query helpers ─────────────────────────────────────────────────
 
     def node_dict(self, urn: str) -> dict | None:
         """Return a node as a dict with urn/node_type/parent_urn/metadata

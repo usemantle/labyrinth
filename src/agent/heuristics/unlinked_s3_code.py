@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 from src.agent.heuristics._base import BaseHeuristic
-from src.graph.graph_models import EdgeType, NodeType
+from src.graph.graph_models import NodeType
 
 
 class UnlinkedS3Code(BaseHeuristic):
     name = "unlinked_s3_code"
     source_node_type = NodeType.FUNCTION
     metadata_key = "aws_s3_operations"
-    target_edge_type = EdgeType.WRITES
-    target_node_type = NodeType.S3_BUCKET
     skill_file = "link-code-to-s3.md"
 
     @classmethod

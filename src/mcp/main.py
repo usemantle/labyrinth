@@ -5,7 +5,7 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 from src.mcp.graph_store import GraphStore
-from src.mcp.tools import code_data, query, security, soft_links, traversal
+from src.mcp.tools import code_data, node_metadata, query, security, soft_links, traversal
 
 
 class _LockedMCP:
@@ -47,6 +47,7 @@ def run_mcp_server(graph_path: Path) -> None:
     code_data.register(locked_mcp, store)
     traversal.register(locked_mcp, store)
     soft_links.register(locked_mcp, store)
+    node_metadata.register(locked_mcp, store)
     security.register(locked_mcp, store)
 
     mcp.run(transport="stdio")

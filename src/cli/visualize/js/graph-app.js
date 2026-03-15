@@ -282,30 +282,22 @@ async function main() {
     state.allEdges = data.edges;
     console.log(`[labyrinth] Loaded ${state.allNodes.length} nodes, ${state.allEdges.length} edges`);
 
-    // Merge soft links
-    try {
-      const slResp = await fetch("soft_links.json");
-      if (slResp.ok) {
-        const slData = await slResp.json();
-        const nodeUrns = new Set(state.allNodes.map((n) => n.urn));
-        for (const link of slData.soft_links || []) {
-          if (!nodeUrns.has(link.from_urn) || !nodeUrns.has(link.to_urn)) continue;
-          state.softLinkIds.add(link.id);
-          state.allEdges.push({
-            uuid: link.id,
-            from_urn: link.from_urn,
-            to_urn: link.to_urn,
-            edge_type: link.edge_type || "reads",
-            metadata: {
-              detection_method: link.detection_method || "soft_link",
-              confidence: link.confidence,
-              note: link.note,
-            },
-          });
-        }
-      }
-    } catch (_) {
-      /* soft_links.json missing or invalid */
+    // Merge soft links from inline data
+    const nodeUrns = new Set(state.allNodes.map((n) => n.urn));
+    for (const link of data.soft_links || []) {
+      if (!nodeUrns.has(link.from_urn) || !nodeUrns.has(link.to_urn)) continue;
+      state.softLinkIds.add(link.id);
+      state.allEdges.push({
+        uuid: link.id,
+        from_urn: link.from_urn,
+        to_urn: link.to_urn,
+        edge_type: link.edge_type || "reads",
+        metadata: {
+          detection_method: link.detection_method || "soft_link",
+          confidence: link.confidence,
+          note: link.note,
+        },
+      });
     }
 
     // Set up rebuild/refresh callbacks

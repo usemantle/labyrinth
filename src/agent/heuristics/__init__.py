@@ -8,7 +8,7 @@ To add a new heuristic:
 from __future__ import annotations
 
 from src.agent.candidates import Candidate
-from src.agent.heuristics._base import BaseHeuristic
+from src.agent.heuristics._base import BaseHeuristic, OutputType
 from src.agent.heuristics.orphaned_ecr_repo import OrphanedEcrRepo
 from src.agent.heuristics.unlinked_dockerfile import UnlinkedDockerfile
 from src.agent.heuristics.unlinked_orm_model import UnlinkedOrmModel
@@ -38,6 +38,7 @@ __all__ = [
     "BaseHeuristic",
     "HEURISTICS_BY_NAME",
     "OrphanedEcrRepo",
+    "OutputType",
     "UnlinkedDockerfile",
     "UnlinkedOrmModel",
     "UnlinkedS3Code",

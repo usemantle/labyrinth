@@ -4,20 +4,18 @@ from __future__ import annotations
 
 import json
 import tempfile
-import uuid
 
-from src.agent.candidates import Candidate, filter_already_linked
+from src.agent.candidates import Candidate, filter_already_evaluated
 from src.mcp.graph_store import GraphStore
 
 
-def _make_candidate(source_urn: str, target_edge_type: str = "builds") -> Candidate:
+def _make_candidate(source_urn: str, heuristic_name: str = "test") -> Candidate:
     return Candidate(
         source_urn=source_urn,
         source_node_type="file",
         source_metadata={},
-        heuristic_name="test",
-        target_edge_type=target_edge_type,
-        target_node_type="image_repository",
+        heuristic_name=heuristic_name,
+        output_type="soft_link",
         skill_file="",
     )
 
@@ -27,6 +25,7 @@ def _make_store(nodes: list[dict], edges: list[dict] | None = None) -> GraphStor
         "generated_at": "2024-01-01T00:00:00Z",
         "nodes": nodes,
         "edges": edges or [],
+        "soft_links": [],
     }
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(data, f)
@@ -34,60 +33,39 @@ def _make_store(nodes: list[dict], edges: list[dict] | None = None) -> GraphStor
     return GraphStore(path)
 
 
-class TestFilterAlreadyLinked:
-    def test_keeps_unlinked_candidates(self):
+class TestFilterAlreadyEvaluated:
+    def test_keeps_unevaluated(self):
         nodes = [
             {"urn": "urn:a", "node_type": "file", "metadata": {}},
-            {"urn": "urn:b", "node_type": "image_repository", "metadata": {}},
         ]
         store = _make_store(nodes)
         try:
             candidates = [_make_candidate("urn:a")]
-            result = filter_already_linked(candidates, store)
+            result = filter_already_evaluated(candidates, store)
             assert len(result) == 1
         finally:
             store.stop_watcher()
 
-    def test_removes_linked_candidates(self):
+    def test_removes_evaluated(self):
         nodes = [
-            {"urn": "urn:a", "node_type": "file", "metadata": {}},
-            {"urn": "urn:b", "node_type": "image_repository", "metadata": {}},
+            {"urn": "urn:a", "node_type": "file", "metadata": {"test_last_evaluated_at": "2024-01-01"}},
         ]
-        edges = [
-            {
-                "uuid": str(uuid.uuid4()),
-                "from_urn": "urn:a",
-                "to_urn": "urn:b",
-                "edge_type": "builds",
-                "metadata": {},
-            }
-        ]
-        store = _make_store(nodes, edges)
+        store = _make_store(nodes)
         try:
-            candidates = [_make_candidate("urn:a", "builds")]
-            result = filter_already_linked(candidates, store)
+            candidates = [_make_candidate("urn:a", "test")]
+            result = filter_already_evaluated(candidates, store)
             assert len(result) == 0
         finally:
             store.stop_watcher()
 
-    def test_different_edge_type_not_filtered(self):
+    def test_different_heuristic_not_filtered(self):
         nodes = [
-            {"urn": "urn:a", "node_type": "file", "metadata": {}},
-            {"urn": "urn:b", "node_type": "image_repository", "metadata": {}},
+            {"urn": "urn:a", "node_type": "file", "metadata": {"other_last_evaluated_at": "2024-01-01"}},
         ]
-        edges = [
-            {
-                "uuid": str(uuid.uuid4()),
-                "from_urn": "urn:a",
-                "to_urn": "urn:b",
-                "edge_type": "contains",
-                "metadata": {},
-            }
-        ]
-        store = _make_store(nodes, edges)
+        store = _make_store(nodes)
         try:
-            candidates = [_make_candidate("urn:a", "builds")]
-            result = filter_already_linked(candidates, store)
+            candidates = [_make_candidate("urn:a", "test")]
+            result = filter_already_evaluated(candidates, store)
             assert len(result) == 1
         finally:
             store.stop_watcher()
@@ -95,61 +73,6 @@ class TestFilterAlreadyLinked:
     def test_empty_candidates(self):
         store = _make_store([])
         try:
-            assert filter_already_linked([], store) == []
-        finally:
-            store.stop_watcher()
-
-    def test_incoming_edge_direction_filters_correctly(self):
-        """ECR repos check incoming builds edges, not outgoing."""
-        nodes = [
-            {"urn": "urn:dockerfile", "node_type": "file", "metadata": {}},
-            {"urn": "urn:ecr", "node_type": "image_repository", "metadata": {}},
-        ]
-        edges = [
-            {
-                "uuid": str(uuid.uuid4()),
-                "from_urn": "urn:dockerfile",
-                "to_urn": "urn:ecr",
-                "edge_type": "builds",
-                "metadata": {},
-            }
-        ]
-        store = _make_store(nodes, edges)
-        try:
-            # Candidate with incoming direction should be filtered out
-            candidate = Candidate(
-                source_urn="urn:ecr",
-                source_node_type="image_repository",
-                source_metadata={},
-                heuristic_name="orphaned_ecr_repo",
-                target_edge_type="builds",
-                target_node_type="file",
-                skill_file="",
-                edge_direction="incoming",
-            )
-            result = filter_already_linked([candidate], store)
-            assert len(result) == 0
-        finally:
-            store.stop_watcher()
-
-    def test_incoming_edge_direction_keeps_unlinked(self):
-        """ECR repo with no incoming builds edge stays as candidate."""
-        nodes = [
-            {"urn": "urn:ecr", "node_type": "image_repository", "metadata": {}},
-        ]
-        store = _make_store(nodes)
-        try:
-            candidate = Candidate(
-                source_urn="urn:ecr",
-                source_node_type="image_repository",
-                source_metadata={},
-                heuristic_name="orphaned_ecr_repo",
-                target_edge_type="builds",
-                target_node_type="file",
-                skill_file="",
-                edge_direction="incoming",
-            )
-            result = filter_already_linked([candidate], store)
-            assert len(result) == 1
+            assert filter_already_evaluated([], store) == []
         finally:
             store.stop_watcher()
