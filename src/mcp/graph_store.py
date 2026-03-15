@@ -122,7 +122,9 @@ class GraphStore:
                 organization_id=node.get("organization_id"),
             )
             node_type = node.get("node_type", NodeType.UNKNOWN)
-            self.nodes_by_type.setdefault(node_type, []).append(urn)
+            type_list = self.nodes_by_type.setdefault(node_type, [])
+            if urn not in type_list:
+                type_list.append(urn)
 
             if node_type == NodeType.TABLE:
                 table_name = node.get("metadata", {}).get("table_name", "")
