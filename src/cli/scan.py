@@ -147,6 +147,17 @@ def run_scan(
         project_id, all_nodes, all_edges,
     )
 
+    # Deduplicate nodes by URN (multiple targets/stitching passes can
+    # produce the same node).
+    seen_urns: set[str] = set()
+    unique_nodes: list[Node] = []
+    for node in all_nodes:
+        urn_str = str(node.urn)
+        if urn_str not in seen_urns:
+            seen_urns.add(urn_str)
+            unique_nodes.append(node)
+    all_nodes = unique_nodes
+
     # Enrich sensitivity metadata
     all_nodes = enrich_sensitivity(all_nodes)
 
@@ -159,5 +170,13 @@ def run_scan(
         len(all_nodes), len(all_edges),
         ", ".join(f"{k}={v}" for k, v in sorted(by_type.items())),
     )
+
+    # Validate no duplicate URNs made it through
+    final_urns: set[str] = set()
+    for node in all_nodes:
+        urn_str = str(node.urn)
+        if urn_str in final_urns:
+            raise RuntimeError(f"Duplicate node URN in final graph: {urn_str}")
+        final_urns.add(urn_str)
 
     sink.write(all_nodes, all_edges)

@@ -33,6 +33,7 @@ async def run_discovery(
     project_dir: Path,
     *,
     dry_run: bool = False,
+    heuristic_names: list[str] | None = None,
 ) -> list[CandidateResult]:
     """Run the full discovery pipeline.
 
@@ -47,7 +48,7 @@ async def run_discovery(
     store = GraphStore(str(graph_path))
 
     try:
-        candidates = gather_all_candidates(store)
+        candidates = gather_all_candidates(store, heuristic_names=heuristic_names)
         logger.info("Gathered %d raw candidates", len(candidates))
 
         candidates = filter_already_evaluated(candidates, store)

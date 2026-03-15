@@ -29,10 +29,20 @@ ALL_HEURISTICS: list[BaseHeuristic] = [
 HEURISTICS_BY_NAME: dict[str, BaseHeuristic] = {h.name: h for h in ALL_HEURISTICS}
 
 
-def gather_all_candidates(store: GraphStore) -> list[Candidate]:
-    """Run all registered heuristics and return the combined candidate list."""
+def gather_all_candidates(
+    store: GraphStore,
+    heuristic_names: list[str] | None = None,
+) -> list[Candidate]:
+    """Run registered heuristics and return the combined candidate list.
+
+    If *heuristic_names* is given, only run heuristics whose ``name``
+    is in the list.  Pass ``None`` (the default) to run all.
+    """
+    heuristics = ALL_HEURISTICS
+    if heuristic_names is not None:
+        heuristics = [h for h in ALL_HEURISTICS if h.name in heuristic_names]
     candidates: list[Candidate] = []
-    for heuristic in ALL_HEURISTICS:
+    for heuristic in heuristics:
         candidates.extend(heuristic.find(store))
     return candidates
 

@@ -383,11 +383,29 @@ def agent() -> None:
 
 @agent.command()
 @click.option("--dry-run", is_flag=True, help="Show candidates without invoking the agent.")
-def run(dry_run: bool) -> None:
-    """Run the soft-link discovery agent."""
+@click.option(
+    "--heuristic", "-H",
+    multiple=True,
+    default=None,
+    help="Run only the named heuristic(s). Can be specified multiple times. Omit to run all.",
+)
+def run(dry_run: bool, heuristic: tuple[str, ...]) -> None:
+    """Run the discovery agent."""
     import asyncio
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+    from src.agent.heuristics import HEURISTICS_BY_NAME
+
+    heuristic_names: list[str] | None = None
+    if heuristic:
+        unknown = [h for h in heuristic if h not in HEURISTICS_BY_NAME]
+        if unknown:
+            valid = ", ".join(sorted(HEURISTICS_BY_NAME))
+            raise click.ClickException(
+                f"Unknown heuristic(s): {', '.join(unknown)}. Valid: {valid}"
+            )
+        heuristic_names = list(heuristic)
 
     project = _get_active_project()
     project_dir = PROJECTS_DIR / project
@@ -400,7 +418,7 @@ def run(dry_run: bool) -> None:
 
     from src.agent.runner import run_discovery
 
-    asyncio.run(run_discovery(project_dir, dry_run=dry_run))
+    asyncio.run(run_discovery(project_dir, dry_run=dry_run, heuristic_names=heuristic_names))
 
 
 # ── Config commands ───────────────────────────────────────────────────

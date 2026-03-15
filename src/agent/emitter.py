@@ -36,14 +36,10 @@ async def emit_candidate(
         },
     }
     if candidate.output_type == OutputType.REMEDIATION:
-        gat = os.environ.get("GITHUB_ACCESS_TOKEN", None)
-        if gat:
+        if os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN"):
             mcp_servers["github"] = {
-                "type": "http",
-                "url": "https://api.githubcopilot.com/mcp/",
-                "headers": {
-                    "Authorization": f"Bearer {gat}",
-                },
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-github"],
             }
 
     try:
