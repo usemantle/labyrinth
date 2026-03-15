@@ -10,6 +10,9 @@ classifies them as read, write, or delete.
 
 The ``post_process`` hook links functions to ORM classes they reference
 via CODE_TO_CODE edges.
+
+All enrichment is import-gated: only files that import from
+``sqlalchemy`` are considered.
 """
 
 from __future__ import annotations
@@ -62,44 +65,12 @@ def _classify_operation(op: str) -> str:
 class SQLAlchemyPlugin(CodebasePlugin):
     """Detects SQLAlchemy ``__tablename__`` and enriches class metadata."""
 
+    @classmethod
+    def auto_detect(cls, root_path):
+        return cls._dependency_mentions(root_path, "sqlalchemy")
+
     def supported_languages(self) -> set[str]:
         return {"python"}
-
-    def on_class_node(
-        self,
-        node: Node,
-        class_body_source: str,
-    ) -> Node:
-        match = _TABLENAME_RE.search(class_body_source)
-        if match:
-            node.metadata[NK.ORM_TABLE] = match.group(1)
-            node.metadata[NK.ORM_FRAMEWORK] = "sqlalchemy"
-
-        return node
-
-    def on_function_node(
-        self,
-        node: Node,
-        function_source: str,
-    ) -> Node:
-
-        ops: set[str] = set()
-        for match in _ORM_OP_RE.finditer(function_source):
-            ops.add(match.group(1))
-
-        if _FILTER_DELETE_RE.search(function_source):
-            ops.add("delete")
-
-        if not ops:
-            return node
-
-        node.metadata[NK.ORM_OPERATIONS] = ",".join(sorted(ops))
-        node.metadata[NK.ORM_OPERATION_TYPE] = ",".join(
-            sorted({_classify_operation(op) for op in ops})
-        )
-        node.metadata[NK.ORM_FRAMEWORK] = "sqlalchemy"
-
-        return node
 
     def post_process(
         self,
@@ -107,8 +78,59 @@ class SQLAlchemyPlugin(CodebasePlugin):
         edges: list[Edge],
         context: PostProcessContext,
     ) -> tuple[list[Node], list[Edge]]:
-        """Link functions to ORM classes they reference via CODE_TO_CODE edges."""
-        # Step 1: Build ORM class registry {class_name: class_urn}
+        """Enrich class/function nodes and link functions to ORM classes."""
+        # Step 1: Enrich class nodes with __tablename__ metadata
+        for node in nodes:
+            if NK.CLASS_NAME not in node.metadata:
+                continue
+            rel_path = node.metadata.get(NK.FILE_PATH)
+            if not rel_path:
+                continue
+            file_source = context.file_sources.get(rel_path)
+            if not file_source or not self._file_imports_library(file_source, "sqlalchemy"):
+                continue
+
+            class_source = self._get_node_source(node, context)
+            if not class_source:
+                continue
+
+            match = _TABLENAME_RE.search(class_source)
+            if match:
+                node.metadata[NK.ORM_TABLE] = match.group(1)
+                node.metadata[NK.ORM_FRAMEWORK] = "sqlalchemy"
+
+        # Step 2: Enrich function nodes with ORM operation metadata
+        for node in nodes:
+            if NK.FUNCTION_NAME not in node.metadata:
+                continue
+            rel_path = node.metadata.get(NK.FILE_PATH)
+            if not rel_path:
+                continue
+            file_source = context.file_sources.get(rel_path)
+            if not file_source or not self._file_imports_library(file_source, "sqlalchemy"):
+                continue
+
+            func_source = self._get_node_source(node, context)
+            if not func_source:
+                continue
+
+            ops: set[str] = set()
+            for match in _ORM_OP_RE.finditer(func_source):
+                ops.add(match.group(1))
+
+            if _FILTER_DELETE_RE.search(func_source):
+                ops.add("delete")
+
+            if not ops:
+                continue
+
+            node.metadata[NK.ORM_OPERATIONS] = ",".join(sorted(ops))
+            node.metadata[NK.ORM_OPERATION_TYPE] = ",".join(
+                sorted({_classify_operation(op) for op in ops})
+            )
+            node.metadata[NK.ORM_FRAMEWORK] = "sqlalchemy"
+
+        # Step 3: Link functions to ORM classes they reference
         orm_classes: dict[str, Node] = {}
         for node in nodes:
             if NK.ORM_TABLE in node.metadata and NK.CLASS_NAME in node.metadata:
@@ -117,34 +139,21 @@ class SQLAlchemyPlugin(CodebasePlugin):
         if not orm_classes:
             return nodes, edges
 
-        # Pre-compile word-boundary patterns for each ORM class name
         class_patterns = {
             name: re.compile(r"\b" + re.escape(name) + r"\b")
             for name in orm_classes
         }
 
-        # Step 2: For each function with ORM_OPERATIONS, check for class references
         for node in nodes:
             if NK.ORM_OPERATIONS not in node.metadata:
                 continue
             if NK.FUNCTION_NAME not in node.metadata:
                 continue
 
-            # Get function source from context
-            file_path = node.metadata.get(NK.FILE_PATH)
-            start_line = node.metadata.get(NK.START_LINE)
-            end_line = node.metadata.get(NK.END_LINE)
-            if not file_path or start_line is None or end_line is None:
+            func_source = self._get_node_source(node, context)
+            if not func_source:
                 continue
 
-            source = context.file_sources.get(file_path)
-            if not source:
-                continue
-
-            lines = source.splitlines()
-            func_source = "\n".join(lines[start_line:end_line + 1])
-
-            # Check each ORM class name against function source
             referenced: list[str] = []
             for class_name, pattern in class_patterns.items():
                 if pattern.search(func_source):

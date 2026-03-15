@@ -5,14 +5,14 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata
+from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata, EdgeType
 
 
 @dataclass
 class CallsEdge(Edge):
     """A function calling another function."""
 
-    edge_type: str = "calls"
+    edge_type: str = EdgeType.CALLS
 
     @classmethod
     def create(

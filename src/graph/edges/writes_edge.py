@@ -5,14 +5,14 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata
+from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata, EdgeType
 
 
 @dataclass
 class WritesEdge(Edge):
     """A function or principal writing to a data resource."""
 
-    edge_type: str = "writes"
+    edge_type: str = EdgeType.WRITES
 
     @classmethod
     def create(

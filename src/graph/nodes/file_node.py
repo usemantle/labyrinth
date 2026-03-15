@@ -9,7 +9,7 @@ from typing import ClassVar
 from src.graph.edges.builds_edge import BuildsEdge
 from src.graph.edges.contains_edge import ContainsEdge
 from src.graph.edges.depends_on_edge import DependsOnEdge
-from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
+from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
 
@@ -18,7 +18,7 @@ NK = NodeMetadataKey
 class FileNode(Node):
     """A source file within a codebase."""
 
-    node_type: str = "file"
+    node_type: str = NodeType.FILE
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
         BuildsEdge,

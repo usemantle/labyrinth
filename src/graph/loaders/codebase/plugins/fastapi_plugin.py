@@ -1,12 +1,14 @@
 """
 FastAPI plugin for detecting API entrypoints and resolving route paths.
 
-Phase 1 (on_function_node): Detects @router.get/post/etc decorators and
-adds http_method, route_path, api_framework, router_variable metadata.
-Also detects HTTPAuthorizationCredentials / HTTPBasicCredentials type
-annotations in function parameters for auth scheme tagging.
+All enrichment happens in ``post_process``, gated by whether each file
+actually imports from ``fastapi``.
 
-Phase 2 (post_process): Resolves full route paths by combining:
+Phase 1: Detects @router.get/post/etc decorators and adds http_method,
+route_path, api_framework, router_variable metadata.  Also detects
+HTTPAuthorizationCredentials / HTTPBasicCredentials type annotations.
+
+Phase 2: Resolves full route paths by combining:
 - include_router prefix (from main.py)
 - APIRouter prefix (from router declaration)
 - decorator path (from @router.get("/path"))
@@ -80,33 +82,12 @@ _ROUTER_DEPS_RE = re.compile(
 class FastAPIPlugin(CodebasePlugin):
     """Detects FastAPI route decorators and resolves full route paths."""
 
+    @classmethod
+    def auto_detect(cls, root_path):
+        return cls._dependency_mentions(root_path, "fastapi")
+
     def supported_languages(self) -> set[str]:
         return {"python"}
-
-    def on_function_node(
-        self,
-        node: Node,
-        function_source: str,
-    ) -> Node:
-
-        match = _ROUTE_RE.search(function_source)
-        if match:
-            router_var, http_method, route_path = match.groups()
-            node.metadata[NK.HTTP_METHOD] = http_method.upper()
-            node.metadata[NK.ROUTE_PATH] = route_path
-            node.metadata[NK.API_FRAMEWORK] = "fastapi"
-            node.metadata[NK.ROUTER_VARIABLE] = router_var
-
-        # Detect auth credentials type annotations
-        cred_match = _AUTH_CREDENTIALS_RE.search(function_source)
-        if cred_match:
-            cred_type = cred_match.group(1)
-            if cred_type == "HTTPAuthorizationCredentials":
-                node.metadata[NK.AUTH_SCHEME] = "HTTPBearer"
-            elif cred_type == "HTTPBasicCredentials":
-                node.metadata[NK.AUTH_SCHEME] = "HTTPBasic"
-
-        return node
 
     def post_process(
         self,
@@ -114,24 +95,68 @@ class FastAPIPlugin(CodebasePlugin):
         edges: list[Edge],
         context: PostProcessContext,
     ) -> tuple[list[Node], list[Edge]]:
-        """Resolve full route paths and propagate auth scheme metadata."""
-        # 1. Find APIRouter declarations: {rel_path: {var_name: prefix}}
-        router_prefixes = _find_router_prefixes(context.file_sources)
+        """Enrich function nodes with route metadata and resolve full paths."""
+        # Phase 1: Detect route decorators and auth credentials
+        for node in nodes:
+            if NK.FUNCTION_NAME not in node.metadata:
+                continue
+            rel_path = node.metadata.get(NK.FILE_PATH)
+            if not rel_path:
+                continue
+            file_source = context.file_sources.get(rel_path)
+            if not file_source or not self._file_imports_library(file_source, "fastapi"):
+                continue
 
-        # 2. Find include_router calls and resolve aliases via import map
+            func_source = self._get_node_source(node, context)
+            if not func_source:
+                continue
+
+            # We need the decorator source too — check lines above START_LINE
+            start_line = node.metadata.get(NK.START_LINE)
+            if start_line is not None and start_line > 0:
+                lines = file_source.splitlines()
+                # Look up to 10 lines above for decorators
+                deco_start = max(0, start_line - 10)
+                prefix_lines = lines[deco_start:start_line]
+                # Find contiguous decorator lines immediately before the function
+                deco_lines = []
+                for line in reversed(prefix_lines):
+                    stripped = line.strip()
+                    if stripped.startswith("@") or (deco_lines and stripped.endswith(")")):
+                        deco_lines.insert(0, line)
+                    elif stripped == "":
+                        continue
+                    else:
+                        break
+                full_source = "\n".join(deco_lines) + "\n" + func_source if deco_lines else func_source
+            else:
+                full_source = func_source
+
+            match = _ROUTE_RE.search(full_source)
+            if match:
+                router_var, http_method, route_path = match.groups()
+                node.metadata[NK.HTTP_METHOD] = http_method.upper()
+                node.metadata[NK.ROUTE_PATH] = route_path
+                node.metadata[NK.API_FRAMEWORK] = "fastapi"
+                node.metadata[NK.ROUTER_VARIABLE] = router_var
+
+            # Detect auth credentials type annotations
+            cred_match = _AUTH_CREDENTIALS_RE.search(full_source)
+            if cred_match:
+                cred_type = cred_match.group(1)
+                if cred_type == "HTTPAuthorizationCredentials":
+                    node.metadata[NK.AUTH_SCHEME] = "HTTPBearer"
+                elif cred_type == "HTTPBasicCredentials":
+                    node.metadata[NK.AUTH_SCHEME] = "HTTPBasic"
+
+        # Phase 2: Resolve full route paths and propagate auth
+        router_prefixes = _find_router_prefixes(context.file_sources)
         include_prefixes = _find_include_router_prefixes(
             context.file_sources, context.root_name,
         )
-
-        # 3. Detect security scheme instantiations across all files
-        # {var_name: scheme_class_name}
         scheme_vars = _find_security_schemes(context.file_sources)
-
-        # 4. Detect router-level auth dependencies
-        # {rel_path: {router_var: scheme_class_name}}
         router_auth = _find_router_auth(context.file_sources, scheme_vars)
 
-        # 5. Resolve full_route_path and auth_scheme for each endpoint
         resolved = 0
         auth_tagged = 0
         for node in nodes:
@@ -145,18 +170,14 @@ class FastAPIPlugin(CodebasePlugin):
             if not rel_path or not router_var:
                 continue
 
-            # Get the APIRouter prefix for this variable
             file_routers = router_prefixes.get(rel_path, {})
             router_prefix = file_routers.get(router_var, "")
-
-            # Get include_router prefix for this file's router
             include_prefix = include_prefixes.get(rel_path, "")
 
             full_path = include_prefix + router_prefix + route_path
             node.metadata[NK.FULL_ROUTE_PATH] = full_path
             resolved += 1
 
-            # Auth scheme from Depends(var_name) — more specific than type annotation
             _apply_auth_from_source(node, context, scheme_vars, router_auth)
             if NK.AUTH_SCHEME in node.metadata:
                 auth_tagged += 1

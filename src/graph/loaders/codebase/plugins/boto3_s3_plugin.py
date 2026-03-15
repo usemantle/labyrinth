@@ -5,13 +5,23 @@ Detects direct boto3 S3 client/resource creation and S3 API method calls
 in Python code.  Tags code nodes with metadata so a downstream AI agent
 can resolve which S3 data nodes they correspond to.
 
+All enrichment is import-gated: only files that import ``boto3``
+are considered.
+
 Tier-1 only: no abstraction-layer tracing, no edge creation.
 """
 
+from __future__ import annotations
+
 import re
+from typing import TYPE_CHECKING
 
 from src.graph.graph_models import Node, NodeMetadataKey
 from src.graph.loaders.codebase.plugins._base import CodebasePlugin
+
+if TYPE_CHECKING:
+    from src.graph.graph_models import Edge
+    from src.graph.loaders.codebase.codebase_loader import PostProcessContext
 
 # ── Operation sets ────────────────────────────────────────────────────
 
@@ -90,31 +100,43 @@ NK = NodeMetadataKey
 class Boto3S3Plugin(CodebasePlugin):
     """Detects boto3 S3 client creation and S3 API calls in Python code."""
 
+    @classmethod
+    def auto_detect(cls, root_path):
+        return cls._dependency_mentions(root_path, "boto3")
+
     def supported_languages(self) -> set[str]:
         return {"python"}
 
-    def on_class_node(
+    def post_process(
         self,
-        node: Node,
-        class_body_source: str
-    ) -> Node:
+        nodes: list[Node],
+        edges: list[Edge],
+        context: PostProcessContext,
+    ) -> tuple[list[Node], list[Edge]]:
+        """Enrich class and function nodes with S3 client/operation metadata."""
+        for node in nodes:
+            rel_path = node.metadata.get(NK.FILE_PATH)
+            if not rel_path:
+                continue
+            file_source = context.file_sources.get(rel_path)
+            if not file_source or not self._file_imports_library(file_source, "boto3"):
+                continue
 
-        if _S3_CLIENT_RE.search(class_body_source):
-            node.metadata[NK.AWS_S3_CLIENT] = True
+            node_source = self._get_node_source(node, context)
+            if not node_source:
+                continue
 
-        return node
+            if NK.CLASS_NAME in node.metadata:
+                if _S3_CLIENT_RE.search(node_source):
+                    node.metadata[NK.AWS_S3_CLIENT] = True
 
-    def on_function_node(
-        self,
-        node: Node,
-        function_source: str,
-    ) -> Node:
-        if _S3_CLIENT_RE.search(function_source):
-            node.metadata[NK.AWS_S3_CLIENT] = True
+            elif NK.FUNCTION_NAME in node.metadata:
+                if _S3_CLIENT_RE.search(node_source):
+                    node.metadata[NK.AWS_S3_CLIENT] = True
 
-        result = _detect_operations(function_source)
-        if result:
-            node.metadata[NK.AWS_S3_OPERATIONS] = result[0]
-            node.metadata[NK.AWS_S3_OPERATION_TYPE] = result[1]
+                result = _detect_operations(node_source)
+                if result:
+                    node.metadata[NK.AWS_S3_OPERATIONS] = result[0]
+                    node.metadata[NK.AWS_S3_OPERATION_TYPE] = result[1]
 
-        return node
+        return nodes, edges

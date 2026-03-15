@@ -8,7 +8,7 @@ from typing import ClassVar
 
 from src.graph.edges.contains_edge import ContainsEdge
 from src.graph.edges.depends_on_edge import DependsOnEdge
-from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
+from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
 
@@ -17,7 +17,7 @@ NK = NodeMetadataKey
 class DependencyNode(Node):
     """A third-party package from UV, Cargo, Gradle, etc."""
 
-    node_type: str = "dependency"
+    node_type: str = NodeType.DEPENDENCY
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,

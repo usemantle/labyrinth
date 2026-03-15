@@ -5,6 +5,7 @@ import collections
 import networkx as nx
 
 from mcp.server.fastmcp import FastMCP
+from src.graph.graph_models import EdgeType
 from src.mcp._formatting import _lookup_edge_label, _node_label
 from src.mcp.graph_store import GraphStore
 
@@ -72,6 +73,11 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         directions. Returns both nodes and edges. Useful for understanding
         the local neighborhood of any resource.
 
+        Note: 'contains' edges are excluded from traversal because they
+        represent organizational hierarchy (e.g. aws_account contains all
+        its resources). Following them would pull in entire subtrees of
+        unrelated siblings from root container nodes.
+
         Args:
             center_urn: URN of the center node.
             hops: Number of hops to expand (default 2).
@@ -79,7 +85,12 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         if center_urn not in store.G:
             return f"No node found with URN: {center_urn}"
 
-        undirected = store.G.to_undirected(as_view=True)
+        # Exclude 'contains' edges — they are organizational, not semantic.
+        semantic_view = nx.subgraph_view(
+            store.G,
+            filter_edge=lambda u, v, k: store.G.edges[u, v, k].get("edge_type") != EdgeType.CONTAINS,
+        )
+        undirected = semantic_view.to_undirected(as_view=True)
         ego_nodes = set(nx.ego_graph(undirected, center_urn, radius=hops).nodes())
 
         sub = store.G.subgraph(ego_nodes)

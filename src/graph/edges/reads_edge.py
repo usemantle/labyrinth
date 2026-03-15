@@ -5,14 +5,14 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata
+from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata, EdgeType
 
 
 @dataclass
 class ReadsEdge(Edge):
     """A function or principal reading from a data resource."""
 
-    edge_type: str = "reads"
+    edge_type: str = EdgeType.READS
 
     @classmethod
     def create(

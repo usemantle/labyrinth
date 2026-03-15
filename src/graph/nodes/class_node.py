@@ -10,7 +10,7 @@ from src.graph.edges.calls_edge import CallsEdge
 from src.graph.edges.contains_edge import ContainsEdge
 from src.graph.edges.instantiates_edge import InstantiatesEdge
 from src.graph.edges.models_edge import ModelsEdge
-from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
+from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
 
@@ -19,7 +19,7 @@ NK = NodeMetadataKey
 class ClassNode(Node):
     """A class definition within a source file."""
 
-    node_type: str = "class"
+    node_type: str = NodeType.CLASS
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,

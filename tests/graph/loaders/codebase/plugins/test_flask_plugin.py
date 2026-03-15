@@ -28,6 +28,7 @@ def _find_func(nodes, name):
 
 def test_app_route_get(tmp_path):
     nodes = _load(tmp_path, (
+        "from flask import Flask\n"
         "@app.route('/users')\n"
         "def list_users():\n"
         "    return []\n"
@@ -41,6 +42,7 @@ def test_app_route_get(tmp_path):
 
 def test_route_with_methods(tmp_path):
     nodes = _load(tmp_path, (
+        'from flask import Flask\n'
         '@app.route("/users", methods=["POST"])\n'
         "def create_user():\n"
         "    return {}\n"
@@ -53,6 +55,7 @@ def test_route_with_methods(tmp_path):
 
 def test_blueprint_route(tmp_path):
     nodes = _load(tmp_path, (
+        "from flask import Blueprint\n"
         "@bp.route('/items/<int:item_id>')\n"
         "def get_item(item_id):\n"
         "    return {}\n"

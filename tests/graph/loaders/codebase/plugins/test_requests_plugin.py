@@ -28,6 +28,7 @@ def _find_func(nodes, name):
 
 def test_requests_get(tmp_path):
     nodes = _load(tmp_path, (
+        "import requests\n"
         "def fetch():\n"
         "    return requests.get('https://api.example.com/data')\n"
     ))
@@ -38,6 +39,7 @@ def test_requests_get(tmp_path):
 
 def test_requests_post(tmp_path):
     nodes = _load(tmp_path, (
+        "import requests\n"
         "def send():\n"
         "    return requests.post('https://api.example.com/data', json={})\n"
     ))
@@ -48,6 +50,7 @@ def test_requests_post(tmp_path):
 
 def test_requests_put(tmp_path):
     nodes = _load(tmp_path, (
+        "import requests\n"
         "def update():\n"
         "    return requests.put('https://api.example.com/item/1', json={})\n"
     ))
@@ -58,6 +61,7 @@ def test_requests_put(tmp_path):
 
 def test_requests_delete(tmp_path):
     nodes = _load(tmp_path, (
+        "import requests\n"
         "def remove():\n"
         "    return requests.delete('https://api.example.com/item/1')\n"
     ))
@@ -68,6 +72,7 @@ def test_requests_delete(tmp_path):
 
 def test_requests_session(tmp_path):
     nodes = _load(tmp_path, (
+        "import requests\n"
         "def create_session():\n"
         "    s = requests.Session()\n"
         "    return s\n"

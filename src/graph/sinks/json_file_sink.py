@@ -5,7 +5,7 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
-from src.graph.graph_models import Edge, Node, NodeMetadataKey
+from src.graph.graph_models import Edge, Node, NodeMetadataKey, NodeType
 from src.graph.sinks.sink import Sink
 
 logger = logging.getLogger(__name__)
@@ -17,38 +17,38 @@ def classify_node(node: Node) -> str:
     """Return a node type string based on metadata."""
     m = node.metadata
     if NK.FUNCTION_NAME in m:
-        return "function"
+        return NodeType.FUNCTION
     if NK.CLASS_NAME in m:
-        return "class"
+        return NodeType.CLASS
     if NK.COLUMN_NAME in m:
-        return "column"
+        return NodeType.COLUMN
     if NK.TABLE_NAME in m:
-        return "table"
+        return NodeType.TABLE
     if NK.SCHEMA_NAME in m:
-        return "schema"
+        return NodeType.SCHEMA
     if NK.REPO_NAME in m:
-        return "codebase"
+        return NodeType.CODEBASE
     if NK.FILE_PATH in m and NK.CLASS_NAME not in m and NK.FUNCTION_NAME not in m:
-        return "file"
+        return NodeType.FILE
     if NK.DATABASE_NAME in m:
-        return "database"
+        return NodeType.DATABASE
     if NK.PATH_PATTERN in m:
         if NK.PARTITION_TYPE in m:
-            return "s3_partition"
+            return NodeType.S3_PARTITION
         if NK.OBJECT_COUNT not in m:
-            return "s3_prefix"
-        return "s3_object"
+            return NodeType.S3_PREFIX
+        return NodeType.S3_OBJECT
     if NK.BUCKET_NAME in m:
-        return "s3_bucket"
+        return NodeType.S3_BUCKET
     if NK.PACKAGE_NAME in m:
-        return "dependency"
+        return NodeType.DEPENDENCY
     if NK.ROLE_NAME in m:
-        return "db_role"
-    return "unknown"
+        return NodeType.DB_ROLE
+    return NodeType.UNKNOWN
 
 
 def _serialize_node(node: Node) -> dict:
-    node_type = node.node_type if node.node_type != "unknown" else classify_node(node)
+    node_type = node.node_type if node.node_type != NodeType.UNKNOWN else classify_node(node)
     return {
         "urn": str(node.urn),
         "organization_id": str(node.organization_id),

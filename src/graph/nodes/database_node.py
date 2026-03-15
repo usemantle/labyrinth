@@ -8,7 +8,7 @@ from typing import ClassVar
 
 from src.graph.edges.contains_edge import ContainsEdge
 from src.graph.edges.hosts_edge import HostsEdge
-from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
+from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
 
@@ -17,7 +17,7 @@ NK = NodeMetadataKey
 class DatabaseNode(Node):
     """A database instance (e.g., PostgreSQL, MySQL)."""
 
-    node_type: str = "database"
+    node_type: str = NodeType.DATABASE
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,

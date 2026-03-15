@@ -9,7 +9,7 @@ from typing import ClassVar
 from src.graph.edges.contains_edge import ContainsEdge
 from src.graph.edges.references_edge import ReferencesEdge
 from src.graph.edges.soft_reference_edge import SoftReferenceEdge
-from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
+from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
 
@@ -18,7 +18,7 @@ NK = NodeMetadataKey
 class ColumnNode(Node):
     """A column within a database table."""
 
-    node_type: str = "column"
+    node_type: str = NodeType.COLUMN
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
         ReferencesEdge,

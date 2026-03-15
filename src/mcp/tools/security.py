@@ -13,6 +13,7 @@ import collections
 from typing import TYPE_CHECKING
 
 from mcp.server.fastmcp import FastMCP
+from src.graph.graph_models import EdgeType, NodeType
 
 if TYPE_CHECKING:
     from src.mcp.graph_store import GraphStore
@@ -72,7 +73,7 @@ def _code_label(node: dict) -> str:
 
 def _find_dep_node(store: GraphStore, package_name: str) -> str | None:
     """Find a dependency node URN by package name (case-insensitive)."""
-    for urn in store.nodes_by_type.get("dependency", []):
+    for urn in store.nodes_by_type.get(NodeType.DEPENDENCY, []):
         meta = store.G.nodes[urn].get("metadata", {})
         if meta.get("package_name", "").lower() == package_name.lower():
             return urn
@@ -84,7 +85,7 @@ def _incoming_depends_on(store: GraphStore, dep_urn: str) -> list[tuple[str, dic
     return [
         (from_urn, data)
         for from_urn, _, data in store.G.in_edges(dep_urn, data=True)
-        if data.get("edge_type") == "depends_on"
+        if data.get("edge_type") == EdgeType.DEPENDS_ON
     ]
 
 
@@ -147,7 +148,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         # Find sensitive columns
         sensitive_cols = []
         for _, to_urn, data in store.G.out_edges(table_urn, data=True):
-            if data.get("edge_type") != "contains":
+            if data.get("edge_type") != EdgeType.CONTAINS:
                 continue
             col_node = store.node_dict(to_urn)
             if col_node and col_node["metadata"].get("data_sensitivity"):
@@ -157,7 +158,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         code_urns = [
             from_urn
             for from_urn, _, data in store.G.in_edges(table_urn, data=True)
-            if data.get("edge_type") in {"reads", "writes", "models"}
+            if data.get("edge_type") in {EdgeType.READS, EdgeType.WRITES, EdgeType.MODELS}
         ]
 
         lines = [f"Sensitive data access for table '{table_name}':"]
@@ -219,7 +220,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
     def find_vulnerable_code() -> str:
         """Find all dependencies with known CVEs and the code files that use them."""
         vuln_deps = []
-        for urn in store.nodes_by_type.get("dependency", []):
+        for urn in store.nodes_by_type.get(NodeType.DEPENDENCY, []):
             meta = store.G.nodes[urn].get("metadata", {})
             if meta.get("cve_ids"):
                 vuln_deps.append((urn, meta))
@@ -259,7 +260,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             role_name: Optional filter by role name.
         """
         p2d_edges = []
-        for _et in ("reads", "writes"):
+        for _et in (EdgeType.READS, EdgeType.WRITES):
             for from_urn, to_urn, key in store.edges_by_type.get(_et, []):
                 from_node = store.node_dict(from_urn)
                 if from_node and from_node["node_type"] == "db_role":
@@ -315,8 +316,13 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
     @mcp.tool()
     def blast_radius(urn: str, max_depth: int = 5) -> str:
         """Analyze the blast radius from a compromised node.
-        Starting from any node, follows outgoing edges to find all
+        Starting from any node, follows outgoing semantic edges to find all
         reachable code, data, and dependencies.
+
+        Note: 'contains' edges are excluded because they represent
+        organizational hierarchy, not semantic relationships. Traversing
+        them would pull in entire subtrees of unrelated resources from
+        root container nodes (e.g. aws_account, codebase, database).
 
         Args:
             urn: URN of the starting node.
@@ -325,7 +331,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         if urn not in store.G:
             return f"No node found with URN: {urn}"
 
-        follow_types = {"calls", "reads", "writes", "models", "references", "soft_reference", "depends_on", "contains"}
+        follow_types = {EdgeType.CALLS, EdgeType.READS, EdgeType.WRITES, EdgeType.MODELS, EdgeType.REFERENCES, EdgeType.SOFT_REFERENCE, EdgeType.DEPENDS_ON}
         visited = _bfs(store, urn, max_depth, follow_types)
 
         code_nodes = []
@@ -344,13 +350,13 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             ntype = node["node_type"]
             meta = node["metadata"]
 
-            if ntype in ("function", "class"):
+            if ntype in (NodeType.FUNCTION, NodeType.CLASS):
                 code_nodes.append((node, depth))
-            elif ntype in ("table", "column", "s3_bucket", "s3_prefix", "s3_object"):
+            elif ntype in (NodeType.TABLE, NodeType.COLUMN, NodeType.S3_BUCKET, NodeType.S3_PREFIX, NodeType.S3_OBJECT):
                 data_nodes.append((node, depth))
                 if meta.get("data_sensitivity"):
                     sensitive_count += 1
-            elif ntype == "dependency":
+            elif ntype == NodeType.DEPENDENCY:
                 dep_nodes.append((node, depth))
                 if meta.get("cve_ids"):
                     cve_count += 1
@@ -394,6 +400,9 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         """Trace backwards from a data node to find all code, principals,
         and endpoints that can access it.
 
+        Note: 'contains' edges are excluded because they represent
+        organizational hierarchy, not semantic relationships.
+
         Args:
             urn: URN of the data node to trace from.
             max_depth: Maximum traversal depth (default 5).
@@ -401,7 +410,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         if urn not in store.G:
             return f"No node found with URN: {urn}"
 
-        follow_types = {"reads", "writes", "models", "calls", "contains"}
+        follow_types = {EdgeType.READS, EdgeType.WRITES, EdgeType.MODELS, EdgeType.CALLS}
         visited = _bfs(store, urn, max_depth, follow_types, reverse=True)
 
         code_paths = []
@@ -418,9 +427,9 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             ntype = node["node_type"]
             meta = node["metadata"]
 
-            if ntype == "db_role":
+            if ntype == NodeType.DB_ROLE:
                 principals.append((node, depth))
-            elif ntype in ("function", "class"):
+            elif ntype in (NodeType.FUNCTION, NodeType.CLASS):
                 code_paths.append((node, depth))
                 if meta.get("route_path"):
                     endpoints.append((node, depth))

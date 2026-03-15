@@ -149,6 +149,12 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
     ) -> str:
         """Get all nodes connected to a given node.
 
+        Note: 'contains' edges represent organizational hierarchy
+        (e.g. aws_account contains all its resources, codebase contains
+        files). They do not imply a semantic relationship. Consider
+        filtering by edge_type to focus on meaningful connections like
+        'reads', 'writes', 'calls', 'assumes', etc.
+
         Args:
             urn: The URN of the center node.
             direction: 'outgoing', 'incoming', or 'both' (default).

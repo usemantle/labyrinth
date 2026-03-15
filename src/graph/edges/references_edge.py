@@ -5,14 +5,14 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata
+from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata, EdgeType
 
 
 @dataclass
 class ReferencesEdge(Edge):
     """An explicit reference between data nodes (e.g., foreign key)."""
 
-    edge_type: str = "references"
+    edge_type: str = EdgeType.REFERENCES
 
     @classmethod
     def create(

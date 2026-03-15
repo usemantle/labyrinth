@@ -8,7 +8,7 @@ from typing import ClassVar
 
 from src.graph.edges.reads_edge import ReadsEdge
 from src.graph.edges.writes_edge import WritesEdge
-from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
+from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
 
@@ -17,7 +17,7 @@ NK = NodeMetadataKey
 class IdentityNode(Node):
     """A principal identity such as a database role or IAM role."""
 
-    node_type: str = "identity"
+    node_type: str = NodeType.IDENTITY
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
         ReadsEdge,

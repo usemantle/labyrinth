@@ -3,6 +3,7 @@ from __future__ import annotations
 import networkx as nx
 
 from mcp.server.fastmcp import FastMCP
+from src.graph.graph_models import EdgeType, NodeType
 from src.mcp._formatting import _node_label
 from src.mcp.graph_store import GraphStore
 
@@ -21,7 +22,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         code_edges = [
             (from_urn, data)
             for from_urn, _, data in store.G.in_edges(table_urn, data=True)
-            if data.get("edge_type") in {"reads", "writes", "models"}
+            if data.get("edge_type") in {EdgeType.READS, EdgeType.WRITES, EdgeType.MODELS}
         ]
 
         if not code_edges:
@@ -62,8 +63,8 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         """Given a function or class name, find all database tables it
         references via reads/writes/models edges."""
         matching = []
-        for ntype in ("function", "class"):
-            key = "function_name" if ntype == "function" else "class_name"
+        for ntype in (NodeType.FUNCTION, NodeType.CLASS):
+            key = "function_name" if ntype == NodeType.FUNCTION else "class_name"
             for urn in store.nodes_by_type.get(ntype, []):
                 meta = store.G.nodes[urn].get("metadata", {})
                 if meta.get(key) == name:
@@ -78,7 +79,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             code_edges = [
                 (to_urn, data)
                 for _, to_urn, data in store.G.out_edges(urn, data=True)
-                if data.get("edge_type") in {"reads", "writes", "models"}
+                if data.get("edge_type") in {EdgeType.READS, EdgeType.WRITES, EdgeType.MODELS}
             ]
 
             label = _node_label(node)
@@ -106,12 +107,12 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         to them. These are potential orphaned resources with no known code
         references in the scanned codebase."""
         referenced_urns: set[str] = set()
-        for edge_type in ("reads", "writes", "models"):
+        for edge_type in (EdgeType.READS, EdgeType.WRITES, EdgeType.MODELS):
             for _from, to, _key in store.edges_by_type.get(edge_type, []):
                 referenced_urns.add(to)
 
         orphaned = []
-        for table_urn in store.nodes_by_type.get("table", []):
+        for table_urn in store.nodes_by_type.get(NodeType.TABLE, []):
             if table_urn not in referenced_urns:
                 orphaned.append(store.node_dict(table_urn))
 
@@ -127,10 +128,10 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
 
             data_edge_count = 0
             for _, _, d in store.G.out_edges(table["urn"], data=True):
-                if d.get("edge_type") in {"references", "soft_reference"}:
+                if d.get("edge_type") in {EdgeType.REFERENCES, EdgeType.SOFT_REFERENCE}:
                     data_edge_count += 1
             for _, _, d in store.G.in_edges(table["urn"], data=True):
-                if d.get("edge_type") in {"references", "soft_reference"}:
+                if d.get("edge_type") in {EdgeType.REFERENCES, EdgeType.SOFT_REFERENCE}:
                     data_edge_count += 1
             if data_edge_count:
                 lines.append(f"    FK relationships: {data_edge_count}")
@@ -147,10 +148,10 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                         for all tables that have code references.
         """
         table_map: dict[str, list[tuple[str, dict]]] = {}
-        for edge_type in ("reads", "writes", "models"):
+        for edge_type in (EdgeType.READS, EdgeType.WRITES, EdgeType.MODELS):
             for from_urn, to_urn, _key in store.edges_by_type.get(edge_type, []):
                 target = store.node_dict(to_urn)
-                if not target or target.get("node_type") != "table":
+                if not target or target.get("node_type") != NodeType.TABLE:
                     continue
                 t_name = target["metadata"].get("table_name", "?")
                 if table_name and t_name != table_name:
@@ -204,7 +205,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                         included (default 3).
             limit: Maximum number of clusters to return (default 10).
         """
-        c2c_triples = store.edges_by_type.get("calls", []) + store.edges_by_type.get("instantiates", [])
+        c2c_triples = store.edges_by_type.get(EdgeType.CALLS, []) + store.edges_by_type.get(EdgeType.INSTANTIATES, [])
         c2c_nodes: set[str] = set()
         c2c_graph = nx.DiGraph()
         for from_urn, to_urn, _key in c2c_triples:
@@ -215,7 +216,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         components: list[set[str]] = list(nx.weakly_connected_components(c2c_graph))
 
         c2d_triples = []
-        for et in ("reads", "writes", "models"):
+        for et in (EdgeType.READS, EdgeType.WRITES, EdgeType.MODELS):
             c2d_triples.extend(store.edges_by_type.get(et, []))
         code_nodes_with_data = set()
         for from_urn, _to, _key in c2d_triples:
@@ -230,10 +231,10 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             tables_by_func: dict[str, list[str]] = {}
             for func_urn in component:
                 for _, to_urn, data in store.G.out_edges(func_urn, data=True):
-                    if data.get("edge_type") not in {"reads", "writes", "models"}:
+                    if data.get("edge_type") not in {EdgeType.READS, EdgeType.WRITES, EdgeType.MODELS}:
                         continue
                     target = store.node_dict(to_urn)
-                    if target and target.get("node_type") == "table":
+                    if target and target.get("node_type") == NodeType.TABLE:
                         t_name = target["metadata"].get("table_name", to_urn)
                         tables_by_func.setdefault(t_name, []).append(func_urn)
 

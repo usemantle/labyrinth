@@ -8,7 +8,7 @@ from typing import ClassVar
 
 from src.graph.edges.builds_edge import BuildsEdge
 from src.graph.edges.contains_edge import ContainsEdge
-from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
+from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
 
@@ -17,7 +17,7 @@ NK = NodeMetadataKey
 class ImageRepositoryNode(Node):
     """A container image repository (e.g., AWS ECR repository)."""
 
-    node_type: str = "image_repository"
+    node_type: str = NodeType.IMAGE_REPOSITORY
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,

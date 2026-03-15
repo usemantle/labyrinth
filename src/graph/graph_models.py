@@ -6,7 +6,75 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 
-class NodeMetadataKey(str, enum.Enum):
+class NodeType(enum.StrEnum):
+    """Valid node types in the security graph."""
+
+    # Code
+    CODEBASE = "codebase"
+    FILE = "file"
+    CLASS = "class"
+    FUNCTION = "function"
+    DEPENDENCY = "dependency"
+
+    # Data
+    DATABASE = "database"
+    SCHEMA = "schema"
+    TABLE = "table"
+    COLUMN = "column"
+    RDS_CLUSTER = "rds_cluster"
+
+    # AWS Infrastructure
+    AWS_ACCOUNT = "aws_account"
+    ECS_CLUSTER = "ecs_cluster"
+    ECS_SERVICE = "ecs_service"
+    ECS_TASK_DEFINITION = "ecs_task_definition"
+    S3_BUCKET = "s3_bucket"
+    S3_PREFIX = "s3_prefix"
+    S3_PARTITION = "s3_partition"
+    S3_OBJECT = "s3_object"
+    IMAGE_REPOSITORY = "image_repository"
+    IMAGE = "image"
+
+    # Security
+    SECURITY_GROUP = "security_group"
+    NACL = "nacl"
+    VPC = "vpc"
+
+    # Identity
+    IAM_ROLE = "iam_role"
+    IAM_USER = "iam_user"
+    IAM_POLICY = "iam_policy"
+    IDENTITY = "identity"
+    SSO_GROUP = "sso_group"
+
+    # Legacy / classifier-only
+    DB_ROLE = "db_role"
+    UNKNOWN = "unknown"
+
+
+class EdgeType(enum.StrEnum):
+    """Valid edge types in the security graph."""
+
+    CONTAINS = "contains"
+    HOSTS = "hosts"
+    CALLS = "calls"
+    INSTANTIATES = "instantiates"
+    DEPENDS_ON = "depends_on"
+    BUILDS = "builds"
+    READS = "reads"
+    WRITES = "writes"
+    MODELS = "models"
+    REFERENCES = "references"
+    SOFT_REFERENCE = "soft_reference"
+    ALLOWS_TRAFFIC_TO = "allows_traffic_to"
+    ASSUMES = "assumes"
+    ATTACHES = "attaches"
+    MEMBER_OF = "member_of"
+    PROTECTED_BY = "protected_by"
+    UNKNOWN = "unknown"
+
+
+class NodeMetadataKey(enum.StrEnum):
     """Valid keys for Node metadata dictionaries."""
 
     # ── Database discovery ─────────────────────────────────────────
@@ -107,8 +175,52 @@ class NodeMetadataKey(str, enum.Enum):
     OCI_REVISION = "oci_revision"
     DOCKERFILE_BASE_IMAGES = "dockerfile_base_images"
 
+    # ── RDS ─────────────────────────────────────────────────────────────
+    RDS_ENGINE = "rds_engine"
+    RDS_ENDPOINT = "rds_endpoint"
+    RDS_PORT = "rds_port"
+    RDS_PUBLICLY_ACCESSIBLE = "rds_publicly_accessible"
+    RDS_ENCRYPTION_ENABLED = "rds_encryption_enabled"
+    RDS_STORAGE_ENCRYPTED = "rds_storage_encrypted"
+    RDS_MULTI_AZ = "rds_multi_az"
+    RDS_CLUSTER_ID = "rds_cluster_id"
 
-class EdgeMetadataKey(str, enum.Enum):
+    # ── ECS ─────────────────────────────────────────────────────────────
+    ECS_CLUSTER_NAME = "ecs_cluster_name"
+    ECS_SERVICE_NAME = "ecs_service_name"
+    ECS_TASK_DEFINITION = "ecs_task_definition"
+    ECS_TASK_FAMILY = "ecs_task_family"
+    ECS_TASK_REVISION = "ecs_task_revision"
+    ECS_CONTAINER_IMAGES = "ecs_container_images"
+    ECS_TASK_ROLE_ARN = "ecs_task_role_arn"
+    ECS_EXECUTION_ROLE_ARN = "ecs_execution_role_arn"
+
+    # ── VPC / Security Groups / NACLs ───────────────────────────────────
+    VPC_ID = "vpc_id"
+    VPC_CIDR = "vpc_cidr"
+    SG_ID = "sg_id"
+    SG_NAME = "sg_name"
+    SG_RULES_INGRESS = "sg_rules_ingress"
+    SG_RULES_EGRESS = "sg_rules_egress"
+    NACL_ID = "nacl_id"
+    NACL_RULES = "nacl_rules"
+
+    # ── IAM ─────────────────────────────────────────────────────────────
+    IAM_TRUST_POLICY = "iam_trust_policy"
+    IAM_USER_NAME = "iam_user_name"
+    IAM_ACCESS_KEYS = "iam_access_keys"
+    IAM_MFA_ENABLED = "iam_mfa_enabled"
+    IAM_LAST_ACTIVITY = "iam_last_activity"
+    IAM_POLICY_NAME = "iam_policy_name"
+    IAM_POLICY_ARN = "iam_policy_arn"
+    IAM_POLICY_DOCUMENT = "iam_policy_document"
+
+    # ── SSO ─────────────────────────────────────────────────────────────
+    SSO_GROUP_ID = "sso_group_id"
+    SSO_GROUP_NAME = "sso_group_name"
+
+
+class EdgeMetadataKey(enum.StrEnum):
     """Valid keys for Edge metadata dictionaries."""
 
     # ── Foreign key ────────────────────────────────────────────────
@@ -131,6 +243,12 @@ class EdgeMetadataKey(str, enum.Enum):
 
     # ── Database grants ──────────────────────────────────────────────
     PRIVILEGE = "privilege"
+
+    # ── AWS resource linking ──────────────────────────────────────────
+    ASSUMED_VIA = "assumed_via"
+    SG_RULE_PROTOCOL = "sg_rule_protocol"
+    SG_RULE_PORT_RANGE = "sg_rule_port_range"
+    SG_RULE_DIRECTION = "sg_rule_direction"
 
 
 class _EnumKeyDict:
@@ -299,7 +417,7 @@ class Node:
     urn: URN
     parent_urn: URN | None = None
     metadata: NodeMetadata = field(default_factory=NodeMetadata)
-    node_type: str = "unknown"
+    node_type: str = NodeType.UNKNOWN
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset()
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset()
@@ -323,4 +441,4 @@ class Edge:
     from_urn: URN
     to_urn: URN
     metadata: EdgeMetadata = field(default_factory=EdgeMetadata)
-    edge_type: str = "unknown"
+    edge_type: str = EdgeType.UNKNOWN

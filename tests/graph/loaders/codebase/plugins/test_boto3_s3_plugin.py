@@ -29,6 +29,7 @@ def test_boto3_s3_class_with_client(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "storage.py").write_text(
+        'import boto3\n'
         'class Storage:\n'
         '    def __init__(self):\n'
         '        self.client = boto3.client("s3")\n'
@@ -44,6 +45,7 @@ def test_boto3_s3_class_with_resource(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "storage.py").write_text(
+        "import boto3\n"
         "class Storage:\n"
         "    def __init__(self):\n"
         "        self.s3 = boto3.resource('s3')\n"
@@ -59,6 +61,7 @@ def test_boto3_s3_class_with_session_client(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "storage.py").write_text(
+        'import boto3\n'
         'class Storage:\n'
         '    def __init__(self, session):\n'
         '        self.client = session.client("s3")\n'
@@ -74,6 +77,7 @@ def test_boto3_s3_function_put_object(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "upload.py").write_text(
+        'import boto3\n'
         'def upload(client, data):\n'
         '    client.put_object(Bucket="b", Key="k", Body=data)\n'
     )
@@ -89,6 +93,7 @@ def test_boto3_s3_function_get_object(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "download.py").write_text(
+        'import boto3\n'
         'def download(client):\n'
         '    return client.get_object(Bucket="b", Key="k")\n'
     )
@@ -104,6 +109,7 @@ def test_boto3_s3_function_delete_object(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "cleanup.py").write_text(
+        'import boto3\n'
         'def cleanup(client):\n'
         '    client.delete_object(Bucket="b", Key="k")\n'
     )
@@ -119,6 +125,7 @@ def test_boto3_s3_function_mixed_ops(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "sync.py").write_text(
+        'import boto3\n'
         'def sync(client):\n'
         '    data = client.get_object(Bucket="b", Key="k")\n'
         '    client.put_object(Bucket="b2", Key="k2", Body=data)\n'
@@ -135,6 +142,7 @@ def test_boto3_s3_function_paginator(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "lister.py").write_text(
+        'import boto3\n'
         'def list_keys(client):\n'
         '    paginator = client.get_paginator("list_objects_v2")\n'
         '    for page in paginator.paginate(Bucket="b"):\n'
@@ -152,6 +160,7 @@ def test_boto3_s3_function_upload_download(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "transfer.py").write_text(
+        'import boto3\n'
         'def transfer(client):\n'
         '    client.upload_file("/tmp/a", "bucket", "key")\n'
         '    client.download_file("bucket", "key", "/tmp/b")\n'
@@ -168,6 +177,7 @@ def test_boto3_s3_function_client_and_ops(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "inline.py").write_text(
+        'import boto3\n'
         'def store():\n'
         '    client = boto3.client("s3")\n'
         '    client.put_object(Bucket="b", Key="k", Body="data")\n'
@@ -185,6 +195,7 @@ def test_boto3_s3_class_methods_tagged_independently(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "multi.py").write_text(
+        'import boto3\n'
         'class Store:\n'
         '    def __init__(self):\n'
         '        self.client = boto3.client("s3")\n'
@@ -215,6 +226,7 @@ def test_boto3_s3_ignores_non_s3_service(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "queue.py").write_text(
+        'import boto3\n'
         'class QueueClient:\n'
         '    def __init__(self):\n'
         '        self.client = boto3.client("sqs")\n'
@@ -248,6 +260,7 @@ def test_boto3_s3_no_tags_on_plain_class(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "plain.py").write_text(
+        'import boto3\n'
         'class PlainService:\n'
         '    def run(self):\n'
         '        return True\n'

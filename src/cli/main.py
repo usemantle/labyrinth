@@ -10,6 +10,7 @@ import tomli_w
 from iterfzf import iterfzf
 from pydantic.fields import PydanticUndefined
 
+from src.cli.settings import SETTING_DEFINITIONS, SETTING_GROUPS, get_setting, set_setting
 from src.graph.credentials import CredentialBase, NoCredential
 from src.graph.loaders import LOADER_REGISTRY
 from src.graph.loaders.loader import ConceptLoader
@@ -134,8 +135,8 @@ def init(project_name: str) -> None:
     click.echo(f"Active project set to '{project_name}'.")
 
 
-@cli.command()
-def set_active_project() -> None:
+@cli.command("set-active")
+def set_active() -> None:
     """Switch the active project."""
     _maybe_create_labyrinth_dir()
 
@@ -180,8 +181,8 @@ def add_target() -> None:
 
     click.echo(f"Added target '{urn_str}' to project '{project}'.")
 
-@cli.command()
-def describe_project() -> None:
+@cli.command("describe")
+def describe() -> None:
     """Pretty-print the active project's configuration."""
     project = _get_active_project()
     config = _get_project_config(project)
@@ -289,12 +290,19 @@ def scan() -> None:
     output_path = project_dir / "graph.json"
     sink = JsonFileSink(output_path)
 
-    run_scan(project, project_id, targets, sink, project_dir)
+    global_config = _get_config()
+    run_scan(project, project_id, targets, sink, project_dir, global_config)
     click.echo(f"Graph written to {output_path}")
 
 
 @cli.command()
-def mcp() -> None:
+@click.option(
+    "--graph-path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Explicit path to graph.json. Overrides the active project.",
+)
+def mcp(graph_path: Path | None) -> None:
     """Start the MCP server for the active project's knowledge graph."""
     import sys
 
@@ -305,13 +313,14 @@ def mcp() -> None:
         stream=sys.stderr,
     )
 
-    project = _get_active_project()
-    project_dir = PROJECTS_DIR / project
-    graph_path = project_dir / "graph.json"
+    if graph_path is None:
+        project = _get_active_project()
+        project_dir = PROJECTS_DIR / project
+        graph_path = project_dir / "graph.json"
 
     if not graph_path.exists():
         raise click.ClickException(
-            f"No graph.json found for project '{project}'. Run 'labyrinth scan' first."
+            f"No graph.json found at '{graph_path}'. Run 'labyrinth scan' first."
         )
 
     from src.mcp.main import run_mcp_server
@@ -337,15 +346,15 @@ def visualize(port: int) -> None:
             f"No graph.json found for project '{project}'. Run 'labyrinth scan' first."
         )
 
-    # Resolve the bundled visualize.html relative to this source file.
-    html_src = Path(__file__).resolve().parent / "visualize.html"
-    if not html_src.exists():
-        raise click.ClickException(f"Visualization template not found at {html_src}")
+    # Resolve the bundled visualize/ directory relative to this source file.
+    viz_src = Path(__file__).resolve().parent / "visualize"
+    if not viz_src.exists():
+        raise click.ClickException(f"Visualization template not found at {viz_src}")
 
     # Stage files in a temporary serving directory.
     staging_dir = project_dir / ".visualize"
     staging_dir.mkdir(exist_ok=True)
-    shutil.copy2(html_src, staging_dir / "index.html")
+    shutil.copytree(viz_src, staging_dir, dirs_exist_ok=True)
     shutil.copy2(graph_path, staging_dir / "graph_data.json")
 
     soft_links_path = project_dir / "soft_links.json"
@@ -368,3 +377,90 @@ def visualize(port: int) -> None:
         click.echo("\nStopping server.")
     finally:
         server.server_close()
+
+
+# ── Agent commands ────────────────────────────────────────────────────
+
+
+@cli.group()
+def agent() -> None:
+    """Autonomous agent commands."""
+
+
+@agent.command()
+@click.option("--dry-run", is_flag=True, help="Show candidates without invoking the agent.")
+def run(dry_run: bool) -> None:
+    """Run the soft-link discovery agent."""
+    import asyncio
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+    project = _get_active_project()
+    project_dir = PROJECTS_DIR / project
+    graph_path = project_dir / "graph.json"
+
+    if not graph_path.exists():
+        raise click.ClickException(
+            f"No graph.json found for project '{project}'. Run 'labyrinth scan' first."
+        )
+
+    from src.agent.runner import run_discovery
+
+    asyncio.run(run_discovery(project_dir, dry_run=dry_run))
+
+
+# ── Config commands ───────────────────────────────────────────────────
+
+
+@cli.group()
+def config() -> None:
+    """View and modify global settings."""
+
+
+@config.command("list")
+def config_list() -> None:
+    """Show all settings with current values."""
+    _maybe_create_labyrinth_dir()
+    cfg = _get_config()
+
+    for group in SETTING_GROUPS.values():
+        click.echo(f"\n[{group.name}] {group.description}")
+        for name in group.settings:
+            defn = SETTING_DEFINITIONS[name]
+            value = get_setting(cfg, name)
+            click.echo(f"  {name} = {value}  ({defn.description})")
+
+    # Show ungrouped settings
+    grouped = {n for g in SETTING_GROUPS.values() for n in g.settings}
+    ungrouped = [d for d in SETTING_DEFINITIONS.values() if d.name not in grouped]
+    for defn in ungrouped:
+        value = get_setting(cfg, defn.name)
+        click.echo(f"  {defn.name} = {value}  ({defn.description})")
+
+
+@config.command("get")
+@click.argument("name")
+def config_get(name: str) -> None:
+    """Print the current value of a setting."""
+    _maybe_create_labyrinth_dir()
+    cfg = _get_config()
+    try:
+        value = get_setting(cfg, name)
+    except KeyError as exc:
+        raise click.ClickException(str(exc)) from None
+    click.echo(value)
+
+
+@config.command("set")
+@click.argument("name")
+@click.argument("value")
+def config_set(name: str, value: str) -> None:
+    """Set a configuration value."""
+    _maybe_create_labyrinth_dir()
+    cfg = _get_config()
+    try:
+        cfg = set_setting(cfg, name, value)
+    except (KeyError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from None
+    _save_config(cfg)
+    click.echo(f"{name} = {get_setting(cfg, name)}")

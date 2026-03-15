@@ -11,7 +11,7 @@ from src.graph.edges.contains_edge import ContainsEdge
 from src.graph.edges.instantiates_edge import InstantiatesEdge
 from src.graph.edges.reads_edge import ReadsEdge
 from src.graph.edges.writes_edge import WritesEdge
-from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
+from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
 
@@ -20,7 +20,7 @@ NK = NodeMetadataKey
 class FunctionNode(Node):
     """A function or method within a source file or class."""
 
-    node_type: str = "function"
+    node_type: str = NodeType.FUNCTION
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
         CallsEdge,

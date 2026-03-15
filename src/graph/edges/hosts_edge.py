@@ -5,14 +5,14 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata
+from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata, EdgeType
 
 
 @dataclass
 class HostsEdge(Edge):
     """Infrastructure resource hosting a data resource (e.g., RDS -> database)."""
 
-    edge_type: str = "hosts"
+    edge_type: str = EdgeType.HOSTS
 
     @classmethod
     def create(

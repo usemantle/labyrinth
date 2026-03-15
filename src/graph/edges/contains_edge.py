@@ -5,14 +5,14 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata
+from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata, EdgeType
 
 
 @dataclass
 class ContainsEdge(Edge):
     """Structural containment (e.g., database -> schema -> table -> column)."""
 
-    edge_type: str = "contains"
+    edge_type: str = EdgeType.CONTAINS
 
     @classmethod
     def create(

@@ -36,6 +36,10 @@ logger = logging.getLogger(__name__)
 class UvPlugin(CodebasePlugin):
     """Scans uv.lock for dependencies and checks CVEs via OSV.dev."""
 
+    @classmethod
+    def auto_detect(cls, root_path):
+        return (root_path / "uv.lock").exists()
+
     def supported_languages(self) -> set[str]:
         return {"python"}
 

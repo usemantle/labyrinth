@@ -524,19 +524,13 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
                 if base_classes:
                     class_node.metadata[NodeMetadataKey.BASE_CLASSES] = base_classes
 
-                # Run plugins on class node
-                body = actual.field("body")
-                body_source = body.text() if body else ""
-                for plugin in self._plugins:
-                    if language in (plugin.supported_languages() or ()):
-                        class_node = plugin.on_class_node(class_node, body_source)
-
                 nodes.append(class_node)
                 edges.append(ContainsEdge.create(
                     self.organization_id, parent_urn, class_urn,
                 ))
 
                 # Recurse into class body
+                body = actual.field("body")
                 if body:
                     sub_nodes, sub_edges = self._extract_from_scope(
                         body, config, class_urn, root_name, rel_path,
@@ -570,12 +564,6 @@ class CodebaseLoader(ConceptLoader, abc.ABC):
                     is_method=is_method,
                 )
                 func_node.metadata[NodeMetadataKey.FILE_PATH] = rel_path
-
-                # Run plugins on function node (child.text() includes decorators)
-                func_source = child.text()
-                for plugin in self._plugins:
-                    if language in (plugin.supported_languages() or ()):
-                        func_node = plugin.on_function_node(func_node, func_source)
 
                 nodes.append(func_node)
                 edges.append(ContainsEdge.create(

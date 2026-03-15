@@ -32,6 +32,7 @@ def _make_orm_repo(tmp_path):
     repo = tmp_path / "code"
     repo.mkdir()
     (repo / "models.py").write_text(
+        'from sqlalchemy import Column\n'
         'class User:\n'
         '    __tablename__ = "users"\n'
         '    id: int\n'
@@ -42,6 +43,7 @@ def _make_orm_repo(tmp_path):
         '    id: int\n'
     )
     (repo / "api.py").write_text(
+        'from sqlalchemy.orm import Session\n'
         'from models import User\n'
         '\n'
         'def create_user():\n'

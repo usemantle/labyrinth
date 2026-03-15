@@ -1,7 +1,7 @@
 """
 Unit tests for the codebase plugin system (CodebasePlugin base class).
 
-Verifies that plugins receive class/function nodes, run in order,
+Verifies that plugins enrich nodes via post_process, run in order,
 and that the loader works without plugins (backward compat).
 """
 
@@ -19,24 +19,24 @@ NK = NodeMetadataKey
 
 
 class _TrackingPlugin(CodebasePlugin):
-    """Test plugin that records what it was called with."""
+    """Test plugin that records what it was called with during post_process."""
 
     def __init__(self):
-        self.class_calls = []
-        self.function_calls = []
+        self.class_names = []
+        self.function_names = []
 
     def supported_languages(self):
         return {'python'}
 
-    def on_class_node(self, node, class_body_source):
-        self.class_calls.append(node.metadata.get(NK.CLASS_NAME))
-        node.metadata[NK.ORM_TABLE] = "__tracked__"
-        return node
-
-    def on_function_node(self, node, function_source):
-        self.function_calls.append((node.metadata.get(NK.FUNCTION_NAME),))
-        node.metadata[NK.ORM_TABLE] = "__tracked__"
-        return node
+    def post_process(self, nodes, edges, context):
+        for node in nodes:
+            if NK.CLASS_NAME in node.metadata:
+                self.class_names.append(node.metadata[NK.CLASS_NAME])
+                node.metadata[NK.ORM_TABLE] = "__tracked__"
+            elif NK.FUNCTION_NAME in node.metadata:
+                self.function_names.append(node.metadata[NK.FUNCTION_NAME])
+                node.metadata[NK.ORM_TABLE] = "__tracked__"
+        return nodes, edges
 
 
 def test_plugin_receives_class_nodes(tmp_path):
@@ -51,8 +51,8 @@ def test_plugin_receives_class_nodes(tmp_path):
     loader = FileSystemCodebaseLoader(organization_id=ORG_ID, plugins=[plugin])
     nodes, _ = loader.load(str(repo))
 
-    assert len(plugin.class_calls) == 1
-    assert plugin.class_calls[0] == "User"
+    assert len(plugin.class_names) == 1
+    assert plugin.class_names[0] == "User"
 
     user = next(n for n in nodes if n.metadata.get(NK.CLASS_NAME) == "User")
     assert user.metadata[NK.ORM_TABLE] == "__tracked__"
@@ -70,8 +70,7 @@ def test_plugin_receives_function_nodes(tmp_path):
     loader = FileSystemCodebaseLoader(organization_id=ORG_ID, plugins=[plugin])
     nodes, _ = loader.load(str(repo))
 
-    assert len(plugin.function_calls) == 1
-    assert plugin.function_calls[0][0] == "hello"
+    assert "hello" in plugin.function_names
 
 
 def test_plugin_skips_non_python_for_language_check(tmp_path):
@@ -87,8 +86,8 @@ def test_plugin_skips_non_python_for_language_check(tmp_path):
     loader = FileSystemCodebaseLoader(organization_id=ORG_ID, plugins=[plugin])
     loader.load(str(repo))
 
-    assert len(plugin.class_calls) == 0
-    assert len(plugin.function_calls) == 0
+    assert len(plugin.class_names) == 0
+    assert len(plugin.function_names) == 0
 
 
 def test_multiple_plugins_chain(tmp_path):
@@ -101,17 +100,21 @@ def test_multiple_plugins_chain(tmp_path):
         def supported_languages(self):
             return {"python"}
 
-        def on_class_node(self, node, src):
-            node.metadata[NK.ORM_TABLE] = "test_chain"
-            return node
+        def post_process(self, nodes, edges, context):
+            for node in nodes:
+                if NK.CLASS_NAME in node.metadata:
+                    node.metadata[NK.ORM_TABLE] = "test_chain"
+            return nodes, edges
 
     class PluginB(CodebasePlugin):
         def supported_languages(self):
             return {"python"}
 
-        def on_class_node(self, node, src):
-            node.metadata[NK.ORM_FRAMEWORK] = node.metadata.get(NK.ORM_TABLE, "")
-            return node
+        def post_process(self, nodes, edges, context):
+            for node in nodes:
+                if NK.CLASS_NAME in node.metadata:
+                    node.metadata[NK.ORM_FRAMEWORK] = node.metadata.get(NK.ORM_TABLE, "")
+            return nodes, edges
 
     loader = FileSystemCodebaseLoader(
         organization_id=ORG_ID, plugins=[PluginA(), PluginB()],

@@ -4,8 +4,30 @@ import uuid
 from datetime import UTC, datetime
 
 from mcp.server.fastmcp import FastMCP
+from src.graph.graph_models import EdgeType
 from src.mcp._formatting import _node_label
 from src.mcp.graph_store import EDGE_NAMESPACE, GraphStore
+
+# Valid edge types that soft links can create.
+SOFT_LINK_EDGE_TYPES = frozenset({
+    EdgeType.BUILDS,
+    EdgeType.READS,
+    EdgeType.WRITES,
+    EdgeType.REFERENCES,
+    EdgeType.MODELS,
+    EdgeType.CALLS,
+    EdgeType.DEPENDS_ON,
+    EdgeType.CONTAINS,
+    EdgeType.SOFT_REFERENCE,
+})
+
+# Confidence levels mapped to numeric scores for storage/comparison.
+CONFIDENCE_LEVELS = {
+    "VERY_HIGH": 0.95,
+    "HIGH": 0.8,
+    "MEDIUM": 0.6,
+    "LOW": 0.4,
+}
 
 
 def register(mcp: FastMCP, store: GraphStore) -> None:
@@ -13,29 +35,51 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
     def add_soft_link(
         from_urn: str,
         to_urn: str,
-        confidence: float = 0.7,
+        edge_type: str = "soft_reference",
+        confidence: str = "MEDIUM",
         note: str = "",
     ) -> str:
-        """Manually create a soft_reference edge between two URNs. The link is
-        persisted to soft_links.json and immediately added to the in-memory
-        graph.
+        """Create an edge between two nodes. The link is persisted to
+        soft_links.json and immediately added to the in-memory graph.
+
+        Use this to manually establish relationships that automated
+        scanning could not detect (e.g. Dockerfile → ECR repository,
+        code → S3 bucket).
 
         Args:
             from_urn: Source node URN (must exist in graph).
             to_urn: Target node URN (must exist in graph).
-            confidence: Confidence score between 0.0 and 1.0 (default 0.7).
-            note: Human-readable reason for the link.
+            edge_type: Relationship type. One of: builds, reads, writes,
+                       references, models, calls, depends_on, contains,
+                       soft_reference (default).
+            confidence: Confidence level: VERY_HIGH, HIGH, MEDIUM (default),
+                        or LOW.
+            note: Human-readable reason for the link — include your
+                  evidence so future reviewers understand the rationale.
         """
         if from_urn not in store.G:
             return f"Error: from_urn not found in graph: {from_urn}"
         if to_urn not in store.G:
             return f"Error: to_urn not found in graph: {to_urn}"
+        if edge_type not in SOFT_LINK_EDGE_TYPES:
+            return (
+                f"Error: invalid edge_type '{edge_type}'. "
+                f"Valid types: {', '.join(sorted(SOFT_LINK_EDGE_TYPES))}"
+            )
+        confidence_upper = confidence.upper()
+        if confidence_upper not in CONFIDENCE_LEVELS:
+            return (
+                f"Error: invalid confidence '{confidence}'. "
+                f"Valid levels: {', '.join(CONFIDENCE_LEVELS)}"
+            )
+        confidence_score = CONFIDENCE_LEVELS[confidence_upper]
 
         for existing in store.soft_links:
-            if existing["from_urn"] == from_urn and existing["to_urn"] == to_urn:
+            if (existing["from_urn"] == from_urn
+                    and existing["to_urn"] == to_urn
+                    and existing.get("edge_type") == edge_type):
                 return f"Error: soft link already exists (id={existing['id']})"
 
-        edge_type = "soft_reference"
         link_id = str(uuid.uuid4())
         edge_key = str(uuid.uuid5(
             EDGE_NAMESPACE, f"{from_urn}:{to_urn}:{edge_type}"
@@ -48,7 +92,8 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             "to_urn": to_urn,
             "edge_type": edge_type,
             "detection_method": "soft_link",
-            "confidence": confidence,
+            "confidence": confidence_score,
+            "confidence_level": confidence_upper,
             "note": note,
             "created_at": datetime.now(UTC).isoformat(),
         }
@@ -59,7 +104,8 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             edge_type=edge_type,
             metadata={
                 "detection_method": "soft_link",
-                "confidence": confidence,
+                "confidence": confidence_score,
+                "confidence_level": confidence_upper,
                 "note": note,
             },
             organization_id=org_id,
@@ -73,8 +119,8 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
         to_label = _node_label(store.node_dict(to_urn))
         return (
             f"Soft link created (id={link_id}):\n"
-            f"  {from_label} --[soft_reference]--> {to_label}\n"
-            f"  confidence={confidence}, note={note!r}"
+            f"  {from_label} --[{edge_type}]--> {to_label}\n"
+            f"  confidence={confidence_upper}, note={note!r}"
         )
 
     @mcp.tool()
@@ -95,7 +141,9 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
             lines.append(f"        {link['from_urn']}")
             lines.append(f"  to:   [{to_node['node_type'] if to_node else '?'}] {to_label}")
             lines.append(f"        {link['to_urn']}")
-            lines.append(f"  confidence: {link.get('confidence', '?')}")
+            level = link.get("confidence_level", "")
+            score = link.get("confidence", "?")
+            lines.append(f"  confidence: {level} ({score})" if level else f"  confidence: {score}")
             lines.append(f"  note: {link.get('note', '')}")
             lines.append(f"  created_at: {link.get('created_at', '?')}")
 
@@ -120,7 +168,7 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
 
         from_urn = target_link["from_urn"]
         to_urn = target_link["to_urn"]
-        edge_type = target_link.get("edge_type", "soft_reference")
+        edge_type = target_link.get("edge_type", EdgeType.SOFT_REFERENCE)
         edge_key = str(uuid.uuid5(
             EDGE_NAMESPACE, f"{from_urn}:{to_urn}:{edge_type}"
         ))

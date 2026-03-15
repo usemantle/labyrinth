@@ -5,14 +5,14 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata
+from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata, EdgeType
 
 
 @dataclass
 class BuildsEdge(Edge):
     """A Dockerfile defining images pushed to a repository."""
 
-    edge_type: str = "builds"
+    edge_type: str = EdgeType.BUILDS
 
     @classmethod
     def create(

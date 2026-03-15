@@ -5,14 +5,14 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata
+from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata, EdgeType
 
 
 @dataclass
 class SoftReferenceEdge(Edge):
     """An implicit or inferred reference between data nodes."""
 
-    edge_type: str = "soft_reference"
+    edge_type: str = EdgeType.SOFT_REFERENCE
 
     @classmethod
     def create(

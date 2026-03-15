@@ -2,20 +2,20 @@
 Plugin interface for enriching codebase nodes during scanning.
 
 Plugins are passed to CodebaseLoader via the ``plugins`` constructor
-parameter.  The loader calls each plugin's hook methods after extracting
-class and function nodes, allowing plugins to add domain-specific
-metadata (e.g. ORM table mappings, API route annotations).
-
-Plugins also have a ``post_process`` hook that runs after all files have
-been scanned and after language analyzers have completed.  This allows
-plugins to perform cross-file analysis using the full symbol table.
+parameter.  All enrichment happens in the ``post_process`` hook, which
+runs after all files have been scanned and after language analyzers
+have completed.  This gives plugins access to the full symbol table
+and file sources, enabling import-gated enrichment that avoids
+cross-pollination between unrelated frameworks.
 """
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from src.graph.graph_models import Edge, Node
+from src.graph.graph_models import Edge, Node, NodeMetadataKey
 
 if TYPE_CHECKING:
     from src.graph.loaders.codebase.codebase_loader import PostProcessContext
@@ -24,9 +24,72 @@ if TYPE_CHECKING:
 class CodebasePlugin:
     """Base class for codebase loader plugins.
 
-    Override the hook methods you care about.  Default implementations
-    are no-ops that return the node unchanged.
+    All domain-specific enrichment should be done in ``post_process``.
+    Use the ``_file_imports_library`` helper to gate enrichment by
+    whether a file actually imports the relevant framework.
     """
+
+    _DEP_FILES: tuple[str, ...] = (
+        "pyproject.toml",
+        "requirements.txt",
+        "requirements.in",
+        "setup.py",
+        "setup.cfg",
+    )
+
+    @staticmethod
+    def _dependency_mentions(root_path: Path, package_name: str) -> bool:
+        """Check whether *package_name* appears in any dependency file."""
+        for name in CodebasePlugin._DEP_FILES:
+            dep_file = root_path / name
+            if dep_file.is_file():
+                try:
+                    content = dep_file.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                if package_name in content:
+                    return True
+        return False
+
+    @staticmethod
+    def _file_imports_library(source: str, library: str) -> bool:
+        """Check whether a source file imports from *library*.
+
+        Matches both ``import library`` and ``from library... import ...``
+        patterns.  This is a fast regex check suitable for gating plugin
+        enrichment to files that actually use the framework.
+        """
+        pattern = r"^(?:from\s+|import\s+)" + re.escape(library) + r"\b"
+        return bool(re.search(pattern, source, re.MULTILINE))
+
+    @staticmethod
+    def _get_node_source(
+        node: Node,
+        context: PostProcessContext,
+    ) -> str | None:
+        """Extract a node's source text from file sources using line numbers.
+
+        Works for both function and class nodes.  Returns None if the
+        source cannot be determined.
+        """
+        rel_path = node.metadata.get(NodeMetadataKey.FILE_PATH)
+        start = node.metadata.get(NodeMetadataKey.START_LINE)
+        end = node.metadata.get(NodeMetadataKey.END_LINE)
+        if not rel_path or start is None or end is None:
+            return None
+        source = context.file_sources.get(rel_path)
+        if not source:
+            return None
+        lines = source.splitlines()
+        return "\n".join(lines[start:end + 1])
+
+    @classmethod
+    def auto_detect(cls, root_path: Path) -> bool:
+        """Return True if this plugin is relevant to the project at *root_path*.
+
+        Default implementation returns False.  Subclasses should override.
+        """
+        return False
 
     def supported_languages(self) -> set[str]:
         """Return the set of languages this plugin supports.
@@ -37,41 +100,6 @@ class CodebasePlugin:
         loader invokes this plugin.
         """
         return set()
-
-    def on_class_node(
-        self,
-        node: Node,
-        class_body_source: str
-    ) -> Node:
-        """Called after a class node is extracted.
-
-        Args:
-            node: The class node with existing metadata.
-            class_body_source: Source text of the class body.
-            language: The ast-grep language name (e.g. "python").
-
-        Returns:
-            The (possibly enriched) node.
-        """
-        return node
-
-    def on_function_node(
-        self,
-        node: Node,
-        function_source: str,
-    ) -> Node:
-        """Called after a function/method node is extracted.
-
-        Args:
-            node: The function node with existing metadata.
-            function_source: Source text of the entire function
-                definition (including decorators).
-            language: The ast-grep language name (e.g. "python").
-
-        Returns:
-            The (possibly enriched) node.
-        """
-        return node
 
     def post_process(
         self,

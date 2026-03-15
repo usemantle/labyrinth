@@ -127,7 +127,8 @@ class TestBlastRadius:
         fn = _get_tool(blast_store, "blast_radius")
         result = fn(urn="urn:test:::table_users", max_depth=5)
         assert "orders" in result
-        assert "email" in result
+        # 'contains' edges are excluded — col_email is organizational, not semantic
+        assert "email" not in result
 
     def test_blast_radius_depth_limit(self, blast_store):
         fn = _get_tool(blast_store, "blast_radius")

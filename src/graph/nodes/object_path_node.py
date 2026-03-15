@@ -9,7 +9,7 @@ from typing import ClassVar
 from src.graph.edges.contains_edge import ContainsEdge
 from src.graph.edges.reads_edge import ReadsEdge
 from src.graph.edges.writes_edge import WritesEdge
-from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
+from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
 
@@ -18,7 +18,7 @@ NK = NodeMetadataKey
 class ObjectPathNode(Node):
     """An S3 prefix or object path within a bucket."""
 
-    node_type: str = "s3_prefix"
+    node_type: str = NodeType.S3_PREFIX
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,

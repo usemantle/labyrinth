@@ -16,8 +16,10 @@ import uuid
 from pathlib import Path
 
 from src.graph.edges.builds_edge import BuildsEdge
+from src.graph.edges.hosts_edge import HostsEdge
 from src.graph.edges.models_edge import ModelsEdge
 from src.graph.edges.reads_edge import ReadsEdge
+from src.graph.edges.references_edge import ReferencesEdge
 from src.graph.graph_models import (
     URN,
     Edge,
@@ -26,6 +28,7 @@ from src.graph.graph_models import (
     Node,
     NodeMetadata,
     NodeMetadataKey,
+    NodeType,
 )
 
 logger = logging.getLogger(__name__)
@@ -214,12 +217,12 @@ def stitch_code_to_images(
     dockerfile_by_codebase: dict[str, list[Node]] = {}  # codebase URN str -> [FileNode]
 
     for node in all_nodes:
-        if node.node_type == "image_repository":
+        if node.node_type == NodeType.IMAGE_REPOSITORY:
             repo_name = node.metadata.get(NK.REPOSITORY_NAME, "")
             if repo_name:
                 image_repos[repo_name] = node.urn
 
-        elif node.node_type == "image":
+        elif node.node_type == NodeType.IMAGE:
             oci_source = node.metadata.get(NK.OCI_SOURCE)
             if oci_source and node.parent_urn:
                 # Find the repo name from parent
@@ -228,7 +231,7 @@ def stitch_code_to_images(
                         image_oci_sources[rname] = oci_source
                         break
 
-        elif node.node_type == "codebase":
+        elif node.node_type == NodeType.CODEBASE:
             repo_url = node.metadata.get(NK.REPO_URL, "")
             clone_url = node.metadata.get(NK.CLONE_URL, "")
             repo_name = node.metadata.get(NK.REPO_NAME, "")
@@ -239,7 +242,7 @@ def stitch_code_to_images(
             if repo_name:
                 codebase_names[repo_name] = node.urn
 
-        elif node.node_type == "file" and NK.DOCKERFILE_BASE_IMAGES in node.metadata:
+        elif node.node_type == NodeType.FILE and NK.DOCKERFILE_BASE_IMAGES in node.metadata:
             dockerfiles.append(node)
 
     # Map Dockerfiles to their parent codebase
@@ -316,3 +319,93 @@ def _normalize_url(url: str) -> str:
     url = re.sub(r"^https?://", "", url)
     url = re.sub(r"^git@([^:]+):", r"\1/", url)
     return url.lower()
+
+
+# ── AWS resource stitching ──────────────────────────────────────────
+
+
+def stitch_aws_resources(
+    organization_id: uuid.UUID,
+    all_nodes: list[Node],
+    all_edges: list[Edge],
+) -> tuple[list[Node], list[Edge]]:
+    """Create cross-service edges between AWS resources and existing graph nodes.
+
+    Stitching rules:
+    1. RDS -> Database: Match RDS endpoint to DatabaseNode host -> HostsEdge
+    2. ECS Task -> ECR Image: Match container image URIs to ImageRepositoryNode -> ReferencesEdge
+
+    Args:
+        organization_id: Tenant identifier.
+        all_nodes: Combined node list.
+        all_edges: Combined edge list.
+
+    Returns:
+        The same (nodes, edges) with cross-service edges appended.
+    """
+    NK = NodeMetadataKey
+
+    # Build registries
+    rds_by_endpoint: dict[str, URN] = {}  # endpoint -> rds URN
+    databases_by_host: dict[str, URN] = {}  # host -> database URN
+    ecr_by_uri_prefix: dict[str, URN] = {}  # repo_uri -> ecr URN
+    task_defs: list[Node] = []
+
+    for node in all_nodes:
+        if node.node_type == NodeType.RDS_CLUSTER:
+            endpoint = node.metadata.get(NK.RDS_ENDPOINT)
+            if endpoint:
+                rds_by_endpoint[endpoint] = node.urn
+
+        elif node.node_type == NodeType.DATABASE:
+            host = node.metadata.get(NK.HOST)
+            if host:
+                databases_by_host[host] = node.urn
+
+        elif node.node_type == NodeType.IMAGE_REPOSITORY:
+            repo_uri = node.metadata.get(NK.REPOSITORY_URI)
+            if repo_uri:
+                ecr_by_uri_prefix[repo_uri] = node.urn
+
+        elif node.node_type == NodeType.ECS_TASK_DEFINITION:
+            task_defs.append(node)
+
+    edge_count = 0
+
+    # 1. RDS -> Database: match endpoint to host
+    for endpoint, rds_urn in rds_by_endpoint.items():
+        db_urn = databases_by_host.get(endpoint)
+        if db_urn:
+            all_edges.append(HostsEdge.create(
+                organization_id, rds_urn, db_urn,
+                metadata=EdgeMetadata({
+                    EdgeMetadataKey.DETECTION_METHOD: "endpoint_match",
+                    EdgeMetadataKey.CONFIDENCE: 1.0,
+                }),
+            ))
+            edge_count += 1
+
+    # 2. ECS Task -> ECR Image: match container image URIs
+    for td_node in task_defs:
+        images = td_node.metadata.get(NK.ECS_CONTAINER_IMAGES, [])
+        if not isinstance(images, list):
+            continue
+        for image_uri in images:
+            # Image URI format: {account}.dkr.ecr.{region}.amazonaws.com/{repo}:{tag}
+            # Strip tag/digest to get the repo URI
+            repo_uri = image_uri.split(":")[0] if ":" in image_uri else image_uri
+            repo_uri = repo_uri.split("@")[0] if "@" in repo_uri else repo_uri
+
+            ecr_urn = ecr_by_uri_prefix.get(repo_uri)
+            if ecr_urn:
+                all_edges.append(ReferencesEdge.create(
+                    organization_id, td_node.urn, ecr_urn,
+                    metadata=EdgeMetadata({
+                        EdgeMetadataKey.DETECTION_METHOD: "image_uri_match",
+                        EdgeMetadataKey.CONFIDENCE: 1.0,
+                    }),
+                ))
+                edge_count += 1
+
+    logger.info("Created %d AWS cross-service stitching edges", edge_count)
+    return all_nodes, all_edges

@@ -5,14 +5,14 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata
+from src.graph.graph_models import EDGE_NAMESPACE, URN, Edge, EdgeMetadata, EdgeType
 
 
 @dataclass
 class DependsOnEdge(Edge):
     """A dependency relationship (e.g., file depends on package)."""
 
-    edge_type: str = "depends_on"
+    edge_type: str = EdgeType.DEPENDS_ON
 
     @classmethod
     def create(

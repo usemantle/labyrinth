@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.graph.edges.contains_edge import ContainsEdge
-from src.graph.graph_models import Edge, Node, NodeMetadataKey
+from src.graph.graph_models import Edge, Node, NodeMetadataKey, NodeType
 from src.graph.loaders.codebase.plugins._base import CodebasePlugin
 from src.graph.nodes.file_node import FileNode
 
@@ -65,6 +65,13 @@ def _parse_labels(content: str) -> dict[str, str]:
 class DockerfilePlugin(CodebasePlugin):
     """Discovers Dockerfiles and extracts base images and OCI labels."""
 
+    @classmethod
+    def auto_detect(cls, root_path):
+        for pattern in _DOCKERFILE_GLOBS:
+            if any(root_path.glob(pattern)):
+                return True
+        return False
+
     def supported_languages(self) -> set[str] | None:
         return None  # Universal plugin — runs for any codebase
 
@@ -77,13 +84,13 @@ class DockerfilePlugin(CodebasePlugin):
         # Build lookup from relative path -> node
         file_nodes_by_path: dict[str, Node] = {}
         for node in nodes:
-            if NK.FILE_PATH in node.metadata and node.node_type == "file":
+            if NK.FILE_PATH in node.metadata and node.node_type == NodeType.FILE:
                 file_nodes_by_path[node.metadata[NK.FILE_PATH]] = node
 
         # Find the codebase root URN (first codebase node)
         codebase_urn = None
         for node in nodes:
-            if node.node_type == "codebase":
+            if node.node_type == NodeType.CODEBASE:
                 codebase_urn = node.urn
                 break
 

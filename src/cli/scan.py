@@ -6,12 +6,13 @@ import logging
 import uuid
 from pathlib import Path
 
+from src.cli.settings import get_plugin_enable_mode
 from src.graph.enrichment.sensitivity_classifier import enrich_sensitivity
 from src.graph.graph_models import URN, Edge, Node
 from src.graph.loaders import LOADER_REGISTRY
 from src.graph.loaders.loader import ConceptLoader
 from src.graph.sinks.sink import Sink
-from src.graph.stitching import stitch_code_to_data, stitch_code_to_images
+from src.graph.stitching import stitch_aws_resources, stitch_code_to_data, stitch_code_to_images
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,33 @@ def _is_codebase_target(urn: URN) -> bool:
     return urn.service in _CODEBASE_SERVICES
 
 
+def _resolve_plugins(
+    target: dict,
+    loader_cls: type[ConceptLoader],
+    urn: URN,
+    global_config: dict,
+) -> list:
+    """Determine which plugins to use for a target."""
+    available = loader_cls.available_plugins()
+    if not available:
+        return []
+
+    # Explicit plugins in target config always take precedence
+    explicit = target.get("plugins", [])
+    if explicit:
+        return [available[n]() for n in explicit if n in available]
+
+    mode = get_plugin_enable_mode(global_config)
+    if mode == "auto-enable-all-plugins":
+        return [cls() for cls in available.values()]
+    if mode == "auto-enable-relevant-plugins":
+        # Use URN path for filesystem targets; for git targets auto_detect
+        # will return False (URL path won't contain dep files).
+        root = Path(urn.path).expanduser().resolve()
+        return [cls() for cls in available.values() if cls.auto_detect(root)]
+    return []  # manually-enable-plugins
+
+
 # ── Scan orchestration ───────────────────────────────────────────────
 
 def run_scan(
@@ -55,8 +83,12 @@ def run_scan(
     targets: list[dict],
     sink: Sink,
     project_dir: Path,
+    global_config: dict | None = None,
 ) -> None:
     """Scan all given targets, stitch edges, and write results to the sink."""
+    if global_config is None:
+        global_config = {}
+
     all_code_nodes: list[Node] = []
     all_code_edges: list[Edge] = []
     all_data_nodes: list[Node] = []
@@ -72,13 +104,9 @@ def run_scan(
 
         kwargs: dict = {"project_dir": project_dir}
 
-        # Instantiate plugins from config.
-        plugin_names = target.get("plugins", [])
-        if plugin_names:
-            available = loader_cls.available_plugins()
-            plugins = [available[n]() for n in plugin_names if n in available]
-            if plugins:
-                kwargs["plugins"] = plugins
+        plugins = _resolve_plugins(target, loader_cls, urn, global_config)
+        if plugins:
+            kwargs["plugins"] = plugins
 
         loader, resource = loader_cls.from_target_config(
             project_id, urn, credentials, **kwargs,
@@ -111,6 +139,11 @@ def run_scan(
 
     # Stitch code-to-image edges if image repositories exist.
     all_nodes, all_edges = stitch_code_to_images(
+        project_id, all_nodes, all_edges,
+    )
+
+    # Stitch AWS cross-service edges (RDS->database, ECS->ECR, etc.)
+    all_nodes, all_edges = stitch_aws_resources(
         project_id, all_nodes, all_edges,
     )
 

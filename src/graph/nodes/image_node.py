@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from src.graph.edges.contains_edge import ContainsEdge
-from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
+from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
 
@@ -16,7 +16,7 @@ NK = NodeMetadataKey
 class ImageNode(Node):
     """A container image identified by digest (e.g., an ECR image)."""
 
-    node_type: str = "image"
+    node_type: str = NodeType.IMAGE
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset()
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({

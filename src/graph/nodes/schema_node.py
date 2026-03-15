@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from src.graph.edges.contains_edge import ContainsEdge
-from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey
+from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
 
@@ -16,7 +16,7 @@ NK = NodeMetadataKey
 class SchemaNode(Node):
     """A schema within a database."""
 
-    node_type: str = "schema"
+    node_type: str = NodeType.SCHEMA
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,
