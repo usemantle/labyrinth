@@ -24,6 +24,9 @@ def _verify_token(credentials: HTTPAuthorizationCredentials = Security(_bearer))
 
 @app.get("/ping")
 def ping():
+    # Intentionally unauthenticated: this is a public health-check/liveness-probe
+    # endpoint. It accepts no user input and returns only a static response, so
+    # there is no path-traversal, IDOR, or injection surface.
     return {"message": "pong"}
 
 
