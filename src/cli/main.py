@@ -213,7 +213,7 @@ def remove_target() -> None:
 @cli.command()
 def add_plugin() -> None:
     """Add a plugin to a codebase target in the active project."""
-    from src.cli.scan import _resolve_loader
+    from src.graph.scanner import _resolve_loader
 
     project = _get_active_project()
     config = _get_project_config(project)
@@ -257,7 +257,7 @@ def scan() -> None:
     """Scan registered targets and build the security graph."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-    from src.cli.scan import run_scan
+    from src.graph.scanner import Scanner
     from src.graph.sinks.json_file_sink import JsonFileSink
 
     project = _get_active_project()
@@ -291,7 +291,7 @@ def scan() -> None:
     sink = JsonFileSink(output_path)
 
     global_config = _get_config()
-    run_scan(project, project_id, targets, sink, project_dir, global_config)
+    Scanner(project, project_id, targets, sink, project_dir, global_config).run()
     click.echo(f"Graph written to {output_path}")
 
 
