@@ -1,10 +1,25 @@
 """Minimal FastAPI app for testing Labyrinth ingestors."""
 
+import os
+
 import aiohttp
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Security
 from fastapi.responses import Response
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 app = FastAPI(title="labyrinth-testapp")
+
+_bearer = HTTPBearer()
+
+
+def _verify_token(credentials: HTTPAuthorizationCredentials = Security(_bearer)) -> str:
+    """Validate the bearer token against the API_SECRET_TOKEN env var."""
+    expected = os.environ.get("API_SECRET_TOKEN")
+    if not expected:
+        raise HTTPException(status_code=500, detail="Server misconfiguration: API_SECRET_TOKEN not set")
+    if credentials.credentials != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return credentials.credentials
 
 
 @app.get("/ping")
@@ -21,8 +36,8 @@ async def get_file(file_path: str):
 
 
 @app.get("/users/{user_id}")
-async def get_user(user_id: int):
-    """Fetch a user by ID — no auth check (IDOR vulnerability)."""
+async def get_user(user_id: int, _token: str = Security(_verify_token)):
+    """Fetch a user by ID — requires a valid bearer token."""
     async with aiohttp.ClientSession() as session:
         async with session.get(f"http://user-service:8080/users/{user_id}") as resp:
             return await resp.json()
