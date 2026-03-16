@@ -1,34 +1,25 @@
-"""
-Unit tests for the code-to-data stitching orchestrator.
-
-Verifies that ORM classes and functions get linked to database tables
-via CODE_TO_DATA edges.
-"""
+"""Tests for OrmClassToTableStitcher."""
 
 import uuid
 
 from src.graph.graph_models import (
     URN,
     EdgeMetadataKey,
+    Graph,
     Node,
     NodeMetadata,
     NodeMetadataKey,
 )
 from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 from src.graph.loaders.codebase.plugins import SQLAlchemyPlugin
-from src.graph.stitching import stitch_code_to_data
+from src.graph.stitchers.orm_class_to_table import OrmClassToTableStitcher
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
-
 NK = NodeMetadataKey
 EK = EdgeMetadataKey
 
 
-# ── Helpers ────────────────────────────────────────────────────────────
-
-
 def _make_orm_repo(tmp_path):
-    """Create a repo with ORM models + an API file that uses them."""
     repo = tmp_path / "code"
     repo.mkdir()
     (repo / "models.py").write_text(
@@ -49,19 +40,11 @@ def _make_orm_repo(tmp_path):
         'def create_user():\n'
         '    user = User(email="test@example.com")\n'
         '    return user\n'
-        '\n'
-        'def list_orders():\n'
-        '    orders = Order.query.all()\n'
-        '    return orders\n'
-        '\n'
-        'def health_check():\n'
-        '    return "ok"\n'
     )
     return repo
 
 
 def _make_data_nodes():
-    """Create fake database nodes mimicking OnPremPostgresLoader output."""
     from src.graph.edges.contains_edge import ContainsEdge
 
     db_urn = URN("urn:onprem:postgres:localhost:5432:mydb")
@@ -83,9 +66,6 @@ def _make_data_nodes():
     return nodes, edges
 
 
-# ── Stitch tests ───────────────────────────────────────────────────────
-
-
 def test_stitch_orm_class_to_table(tmp_path):
     """ORM classes with orm_table link to matching table nodes."""
     repo = _make_orm_repo(tmp_path)
@@ -96,51 +76,15 @@ def test_stitch_orm_class_to_table(tmp_path):
     )
     code_nodes, code_edges = loader.load(str(repo))
 
-    all_nodes, all_edges = stitch_code_to_data(
-        ORG_ID, data_nodes, data_edges, code_nodes, code_edges,
-        code_base_paths=[str(repo)],
-    )
+    graph = Graph(nodes=data_nodes + code_nodes, edges=data_edges + code_edges)
+    stitcher = OrmClassToTableStitcher()
+    result = stitcher.stitch(ORG_ID, graph, {})
 
-    c2d = [e for e in all_edges if e.edge_type in ("models", "reads", "writes")]
-    orm_edges = [e for e in c2d if e.metadata.get(EK.DETECTION_METHOD) == "orm_tablename"]
-
-    # User → users, Order → orders
+    orm_edges = [e for e in result.edges if e.metadata.get(EK.DETECTION_METHOD) == "orm_tablename"]
     assert len(orm_edges) == 2
     targets = {e.metadata[EK.TABLE_NAME] for e in orm_edges}
     assert targets == {"users", "orders"}
     assert all(e.metadata[EK.CONFIDENCE] == 1.0 for e in orm_edges)
-
-
-def test_stitch_function_to_table(tmp_path):
-    """Functions referencing ORM class names get CODE_TO_DATA edges."""
-    repo = _make_orm_repo(tmp_path)
-    data_nodes, data_edges = _make_data_nodes()
-
-    loader = FileSystemCodebaseLoader(
-        organization_id=ORG_ID, plugins=[SQLAlchemyPlugin()],
-    )
-    code_nodes, code_edges = loader.load(str(repo))
-
-    all_nodes, all_edges = stitch_code_to_data(
-        ORG_ID, data_nodes, data_edges, code_nodes, code_edges,
-        code_base_paths=[str(repo)],
-    )
-
-    c2d = [e for e in all_edges if e.edge_type in ("models", "reads", "writes")]
-    func_edges = [e for e in c2d if e.metadata.get(EK.DETECTION_METHOD) == "orm_reference"]
-
-    # create_user references User → links to users table
-    # list_orders references Order → links to orders table
-    # health_check references neither → no edge
-    func_to_table = {
-        str(e.from_urn).rsplit("/", 1)[-1]: e.metadata[EK.TABLE_NAME]
-        for e in func_edges
-    }
-    assert "create_user" in func_to_table
-    assert func_to_table["create_user"] == "users"
-    assert "list_orders" in func_to_table
-    assert func_to_table["list_orders"] == "orders"
-    assert "health_check" not in func_to_table
 
 
 def test_stitch_no_data_nodes(tmp_path):
@@ -151,13 +95,9 @@ def test_stitch_no_data_nodes(tmp_path):
     )
     code_nodes, code_edges = loader.load(str(repo))
 
-    all_nodes, all_edges = stitch_code_to_data(
-        ORG_ID, [], [], code_nodes, code_edges,
-        code_base_paths=[str(repo)],
-    )
-
-    c2d = [e for e in all_edges if e.edge_type in ("models", "reads", "writes")]
-    assert len(c2d) == 0
+    graph = Graph(nodes=code_nodes, edges=code_edges)
+    result = OrmClassToTableStitcher().stitch(ORG_ID, graph, {})
+    assert len(result.edges) == 0
 
 
 def test_stitch_no_orm_models(tmp_path):
@@ -170,17 +110,13 @@ def test_stitch_no_orm_models(tmp_path):
     loader = FileSystemCodebaseLoader(organization_id=ORG_ID)
     code_nodes, code_edges = loader.load(str(repo))
 
-    all_nodes, all_edges = stitch_code_to_data(
-        ORG_ID, data_nodes, data_edges, code_nodes, code_edges,
-        code_base_paths=[str(repo)],
-    )
-
-    c2d = [e for e in all_edges if e.edge_type in ("models", "reads", "writes")]
-    assert len(c2d) == 0
+    graph = Graph(nodes=data_nodes + code_nodes, edges=data_edges + code_edges)
+    result = OrmClassToTableStitcher().stitch(ORG_ID, graph, {})
+    assert len(result.edges) == 0
 
 
 def test_stitch_edge_metadata(tmp_path):
-    """CODE_TO_DATA edges have proper metadata."""
+    """Edges have proper metadata."""
     repo = _make_orm_repo(tmp_path)
     data_nodes, data_edges = _make_data_nodes()
 
@@ -189,13 +125,10 @@ def test_stitch_edge_metadata(tmp_path):
     )
     code_nodes, code_edges = loader.load(str(repo))
 
-    _, all_edges = stitch_code_to_data(
-        ORG_ID, data_nodes, data_edges, code_nodes, code_edges,
-        code_base_paths=[str(repo)],
-    )
+    graph = Graph(nodes=data_nodes + code_nodes, edges=data_edges + code_edges)
+    result = OrmClassToTableStitcher().stitch(ORG_ID, graph, {})
 
-    c2d = [e for e in all_edges if e.edge_type in ("models", "reads", "writes")]
-    for edge in c2d:
+    for edge in result.edges:
         assert EK.DETECTION_METHOD in edge.metadata
         assert EK.CONFIDENCE in edge.metadata
         assert EK.TABLE_NAME in edge.metadata

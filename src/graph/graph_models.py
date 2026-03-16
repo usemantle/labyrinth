@@ -496,3 +496,28 @@ class Edge:
     to_urn: URN
     metadata: EdgeMetadata = field(default_factory=EdgeMetadata)
     edge_type: str = EdgeType.UNKNOWN
+
+
+@dataclass
+class Graph:
+    """Container for a set of nodes and edges in the security graph."""
+
+    nodes: list[Node] = field(default_factory=list)
+    edges: list[Edge] = field(default_factory=list)
+
+    def merge(self, other: Graph) -> None:
+        """Append all nodes and edges from *other* into this graph."""
+        self.nodes.extend(other.nodes)
+        self.edges.extend(other.edges)
+
+    def deduplicate_nodes(self) -> None:
+        """Raise if any duplicate URNs exist — this indicates a configuration or logic error."""
+        seen: set[str] = set()
+        for node in self.nodes:
+            urn_str = str(node.urn)
+            if urn_str in seen:
+                raise RuntimeError(
+                    f"Duplicate node URN detected: {urn_str}. "
+                    "This is symptomatic of a configuration or logical issue."
+                )
+            seen.add(urn_str)
