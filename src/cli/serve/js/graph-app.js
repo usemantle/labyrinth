@@ -337,6 +337,7 @@ function setupTabs() {
   const tabBtns = document.querySelectorAll(".tab-btn");
   const tabContents = {
     graph: document.getElementById("tab-graph"),
+    heuristics: document.getElementById("tab-heuristics"),
     actions: document.getElementById("tab-actions"),
   };
 
@@ -351,6 +352,13 @@ function setupTabs() {
       // Toggle tab content
       Object.values(tabContents).forEach((el) => el.classList.remove("active"));
       if (tabContents[tab]) tabContents[tab].classList.add("active");
+
+      // Lazy-load heuristics on first tab click
+      if (tab === "heuristics" && !state._heuristicsLoaded) {
+        state._heuristicsLoaded = true;
+        const { initHeuristics } = await import("./heuristics.js");
+        initHeuristics();
+      }
 
       // Lazy-load dashboard on first actions tab click
       if (tab === "actions" && !state._dashboardLoaded) {

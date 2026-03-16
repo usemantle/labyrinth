@@ -55,6 +55,7 @@ export const EDGE_STYLES = {
   instantiates:       { color: "#c084fc", size: 1.5 },
   depends_on:         { color: "#22d3ee", size: 1   },
   builds:             { color: "#38bdf8", size: 1.5 },
+  executes:           { color: "#facc15", size: 2   },
   reads:              { color: "#f97316", size: 2   },
   writes:             { color: "#ef4444", size: 2   },
   models:             { color: "#fb923c", size: 1.5 },

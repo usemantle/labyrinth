@@ -12,7 +12,7 @@ from src.graph.edges.assumes_edge import AssumesEdge
 from src.graph.edges.contains_edge import ContainsEdge
 from src.graph.edges.protected_by_edge import ProtectedByEdge
 from src.graph.edges.references_edge import ReferencesEdge
-from src.graph.graph_models import URN, Edge, EdgeMetadata, EdgeMetadataKey, Node
+from src.graph.graph_models import URN, Edge, EdgeMetadata, EdgeMetadataKey, Node, NodeMetadataKey
 from src.graph.loaders.aws.plugins._base import AwsResourcePlugin
 from src.graph.nodes.ecs_cluster_node import EcsClusterNode
 from src.graph.nodes.ecs_service_node import EcsServiceNode
@@ -119,6 +119,16 @@ class EcsResourcePlugin(AwsResourcePlugin):
                     task_definition=task_def_arn,
                     arn=svc.get("serviceArn"),
                 )
+
+                # Capture target group ARNs from load balancer config
+                tg_arns = [
+                    lb["targetGroupArn"]
+                    for lb in svc.get("loadBalancers", [])
+                    if "targetGroupArn" in lb
+                ]
+                if tg_arns:
+                    svc_node.metadata[NodeMetadataKey.ECS_TARGET_GROUP_ARNS] = tg_arns
+
                 nodes.append(svc_node)
                 edges.append(ContainsEdge.create(organization_id, cluster_urn, svc_urn))
 

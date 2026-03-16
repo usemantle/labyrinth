@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 
-from src.agent.candidates import Candidate, CandidateResult
+from src.agent.candidates import Candidate, CandidateResult, candidate_id
 from src.agent.report import format_report, save_report
 
 
 def _make_result(outcome: str, note: str = "", soft_link_id: str | None = None) -> CandidateResult:
     return CandidateResult(
         candidate=Candidate(
+            id=candidate_id(f"urn:test:{outcome}", "test"),
             source_urn=f"urn:test:{outcome}",
             source_node_type="file",
             source_metadata={},

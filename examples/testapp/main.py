@@ -7,9 +7,14 @@ from fastapi.responses import Response
 app = FastAPI(title="labyrinth-testapp")
 
 
-@app.get("/ping")
-def ping():
-    return {"message": "pong"}
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/hello")
+def hello():
+    return {"message": "hello"}
 
 
 @app.get("/files/{file_path:path}")

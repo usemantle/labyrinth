@@ -1,4 +1,4 @@
-"""Pipeline orchestrator: gather → check → emit → report."""
+"""Pipeline orchestrator: analyze → run single candidate."""
 
 from __future__ import annotations
 
@@ -7,8 +7,9 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from src.agent.candidates import CandidateResult, filter_already_evaluated
-from src.agent.emitter import emit_all
+from src.agent.analysis import find_candidate, load_analysis, save_analysis, update_candidate_status
+from src.agent.candidates import Candidate, CandidateResult, filter_already_evaluated
+from src.agent.emitter import emit_candidate
 from src.agent.heuristics import gather_all_candidates
 from src.agent.report import format_report, save_report
 from src.mcp.graph_store import GraphStore
@@ -16,63 +17,111 @@ from src.mcp.graph_store import GraphStore
 logger = logging.getLogger(__name__)
 
 
-def print_candidates(candidates: list) -> None:
-    """Pretty-print the candidate list for dry-run mode."""
-    if not candidates:
-        print("No candidates found.")
-        return
+async def run_analysis(project_dir: Path) -> list[Candidate]:
+    """Evaluate all heuristics and save findings to heuristics.json.
 
-    print(f"Candidates ({len(candidates)}):\n")
-    for i, c in enumerate(candidates, 1):
-        print(f"  {i}. [{c.heuristic_name}] {c.source_urn}")
-        print(f"     actions: {', '.join(c.terminal_actions)}")
-        if c.skill_file:
-            print(f"     skill:  {c.skill_file}")
-        print()
-
-
-async def run_discovery(
-    project_dir: Path,
-    *,
-    dry_run: bool = False,
-    heuristic_names: list[str] | None = None,
-) -> list[CandidateResult]:
-    """Run the full discovery pipeline.
-
-    1. Load the graph
-    2. Gather candidates via heuristics
-    3. Filter out already-evaluated candidates
-    4. (dry_run) Print candidates and return
-    5. Emit: invoke Claude agent for each candidate
-    6. Save report
+    1. Load graph
+    2. Gather all candidates
+    3. Filter already-evaluated
+    4. Save to heuristics.json
+    5. Print summary
     """
     graph_path = project_dir / "graph.json"
     store = GraphStore(str(graph_path))
 
-    run_id = str(uuid.uuid4())
-    started_at = datetime.now(UTC).isoformat()
-
     try:
-        candidates = gather_all_candidates(store, heuristic_names=heuristic_names)
+        candidates = gather_all_candidates(store)
         logger.info("Gathered %d raw candidates", len(candidates))
 
         candidates = filter_already_evaluated(candidates, store)
         logger.info("After filtering: %d candidates", len(candidates))
 
-        if dry_run:
-            print_candidates(candidates)
-            return []
+        analysis_path = save_analysis(candidates, project_dir, store.generated_at)
 
+        # Print summary
         if not candidates:
-            print("No candidates to investigate.")
-            return []
+            print("No candidates found.")
+        else:
+            # Count per heuristic
+            by_heuristic: dict[str, int] = {}
+            for c in candidates:
+                by_heuristic[c.heuristic_name] = by_heuristic.get(c.heuristic_name, 0) + 1
 
-        results = await emit_all(candidates, store, project_dir)
+            print(f"Analysis complete: {len(candidates)} candidate(s)\n")
+            for name, count in sorted(by_heuristic.items()):
+                print(f"  {name}: {count}")
+            print(f"\nSaved to {analysis_path}")
+            print("\nCandidates:")
+            for c in candidates:
+                print(f"  {c.id[:12]}  [{c.heuristic_name}] {c.source_urn}")
 
-        report_path = save_report(results, project_dir, run_id=run_id, started_at=started_at)
-        print(format_report(results))
+        return candidates
+    finally:
+        store.stop_watcher()
+
+
+async def run_single_candidate(project_dir: Path, candidate_id: str) -> CandidateResult:
+    """Execute the agent against a single candidate by UUID.
+
+    1. Load analysis
+    2. Find candidate
+    3. Validate graph freshness
+    4. Run agent
+    5. Save report + update status
+    """
+    # 1. Load analysis
+    try:
+        analysis = load_analysis(project_dir)
+    except FileNotFoundError as exc:
+        raise SystemExit(str(exc)) from None
+
+    # 2. Find candidate
+    candidate = find_candidate(analysis, candidate_id)
+    if candidate is None:
+        lines = [f"Candidate '{candidate_id}' not found.\n", "Available candidates:"]
+        for entry in analysis.get("candidates", []):
+            lines.append(f"  {entry['id'][:12]}  [{entry['heuristic_name']}] {entry['source_urn']}")
+        raise SystemExit("\n".join(lines))
+
+    # 3. Load graph and validate
+    graph_path = project_dir / "graph.json"
+    store = GraphStore(str(graph_path))
+
+    try:
+        if store.generated_at != analysis.get("graph_generated_at"):
+            logger.warning(
+                "Graph has changed since analysis (graph: %s, analysis: %s). "
+                "Consider re-running `labyrinth agent analyze`.",
+                store.generated_at,
+                analysis.get("graph_generated_at"),
+            )
+
+        # Validate candidate URN exists in graph
+        with store.lock:
+            if candidate.source_urn not in store.G.nodes:
+                raise SystemExit(
+                    f"Candidate URN '{candidate.source_urn}' no longer exists in the graph. "
+                    "Re-run `labyrinth agent analyze`."
+                )
+
+        # 4. Update status to running
+        update_candidate_status(project_dir, candidate_id, "running")
+
+        # 5. Run agent
+        run_id = str(uuid.uuid4())
+        started_at = datetime.now(UTC).isoformat()
+
+        result = await emit_candidate(candidate, store, project_dir)
+
+        # 6. Save report
+        report_path = save_report([result], project_dir, run_id=run_id, started_at=started_at)
+        print(format_report([result]))
         print(f"\nFull report saved to {report_path}")
 
-        return results
+        # 7. Update status
+        status = "error" if result.outcome == "error" else "completed"
+        update_candidate_status(project_dir, candidate_id, status)
+
+        return result
     finally:
         store.stop_watcher()

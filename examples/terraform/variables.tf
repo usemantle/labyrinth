@@ -21,3 +21,8 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+variable "hosted_zone_name" {
+  description = "Existing Route53 hosted zone to create records in"
+  type        = string
+}

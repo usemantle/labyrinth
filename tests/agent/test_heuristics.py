@@ -7,10 +7,12 @@ import tempfile
 
 import pytest
 
+from src.agent.candidates import candidate_id
 from src.agent.heuristics import (
     InsecureEndpoint,
     OrphanedEcrRepo,
     UnlinkedDockerfile,
+    UnlinkedEntrypoint,
     UnlinkedS3Code,
     VulnerableDependency,
     gather_all_candidates,
@@ -78,6 +80,7 @@ class TestUnlinkedDockerfile:
             assert len(candidates) == 1
             assert candidates[0].source_urn == dockerfile_node["urn"]
             assert candidates[0].heuristic_name == "unlinked_dockerfile"
+            assert candidates[0].id == candidate_id(dockerfile_node["urn"], "unlinked_dockerfile")
         finally:
             store.stop_watcher()
 
@@ -191,6 +194,7 @@ class TestInsecureEndpoint:
             assert len(candidates) == 1
             assert candidates[0].heuristic_name == "insecure_endpoint"
             assert "create_pr" in candidates[0].terminal_actions
+            assert candidates[0].id == candidate_id(node["urn"], "insecure_endpoint")
         finally:
             store.stop_watcher()
 
@@ -274,6 +278,98 @@ class TestVulnerableDependency:
         ]
 
 
+class TestUnlinkedEntrypoint:
+    heuristic = UnlinkedEntrypoint()
+
+    def test_returns_dockerfile_with_cmd_no_executes_edge(self):
+        node = {
+            "urn": "urn:github:repo:org:::org/app/Dockerfile",
+            "node_type": "file",
+            "metadata": {
+                "file_path": "Dockerfile",
+                "dockerfile_base_images": "python:3.12",
+                "dockerfile_cmd": '["python", "src/main.py"]',
+            },
+        }
+        store = _make_store([node])
+        try:
+            candidates = self.heuristic.find(store)
+            assert len(candidates) == 1
+            assert candidates[0].heuristic_name == "unlinked_entrypoint"
+        finally:
+            store.stop_watcher()
+
+    def test_returns_dockerfile_with_entrypoint_no_executes_edge(self):
+        node = {
+            "urn": "urn:github:repo:org:::org/app/Dockerfile",
+            "node_type": "file",
+            "metadata": {
+                "file_path": "Dockerfile",
+                "dockerfile_base_images": "python:3.12",
+                "dockerfile_entrypoint": '["python", "src/main.py"]',
+            },
+        }
+        store = _make_store([node])
+        try:
+            candidates = self.heuristic.find(store)
+            assert len(candidates) == 1
+            assert candidates[0].heuristic_name == "unlinked_entrypoint"
+        finally:
+            store.stop_watcher()
+
+    def test_ignores_dockerfile_with_executes_edge(self):
+        node = {
+            "urn": "urn:github:repo:org:::org/app/Dockerfile",
+            "node_type": "file",
+            "metadata": {
+                "file_path": "Dockerfile",
+                "dockerfile_base_images": "python:3.12",
+                "dockerfile_cmd": '["python", "src/main.py"]',
+            },
+        }
+        target = {
+            "urn": "urn:github:repo:org:::org/app/src/main.py",
+            "node_type": "file",
+            "metadata": {"file_path": "src/main.py"},
+        }
+        edge = {
+            "uuid": "aaaaaaaa-bbbb-cccc-dddd-ffffffffffff",
+            "from_urn": node["urn"],
+            "to_urn": target["urn"],
+            "edge_type": "executes",
+            "metadata": {},
+        }
+        store = _make_store([node, target], [edge])
+        try:
+            candidates = self.heuristic.find(store)
+            assert len(candidates) == 0
+        finally:
+            store.stop_watcher()
+
+    def test_ignores_file_without_entrypoint_metadata(self):
+        node = {
+            "urn": "urn:github:repo:org:::org/app/src/main.py",
+            "node_type": "file",
+            "metadata": {"file_path": "src/main.py", "language": "python"},
+        }
+        store = _make_store([node])
+        try:
+            assert self.heuristic.find(store) == []
+        finally:
+            store.stop_watcher()
+
+    def test_get_instructions(self):
+        instructions = UnlinkedEntrypoint.get_instructions()
+        assert "ENTRYPOINT" in instructions
+        assert "executes" in instructions
+
+    def test_terminal_actions(self):
+        assert self.heuristic.terminal_actions == [
+            TerminalAction.MARK_EVALUATED,
+            TerminalAction.CREATE_SOFT_LINK,
+        ]
+
+
 class TestGatherAll:
     def test_combines_all_heuristics(self, dockerfile_node, ecr_node, function_with_s3):
         # Add nodes for the new heuristics too
@@ -295,8 +391,15 @@ class TestGatherAll:
                 "cve_ids": ["CVE-2024-23334"],
             },
         }
+        # The dockerfile_node fixture already has dockerfile_base_images.
+        # Add entrypoint metadata so unlinked_entrypoint picks it up too.
+        dockerfile_with_cmd = dict(dockerfile_node)
+        dockerfile_with_cmd["metadata"] = {
+            **dockerfile_node["metadata"],
+            "dockerfile_cmd": '["python", "app.py"]',
+        }
         store = _make_store([
-            dockerfile_node, ecr_node, function_with_s3,
+            dockerfile_with_cmd, ecr_node, function_with_s3,
             unauthenticated_endpoint, vulnerable_dep,
         ])
         try:
@@ -307,5 +410,6 @@ class TestGatherAll:
             assert "orphaned_ecr_repo" in heuristic_names
             assert "insecure_endpoint" in heuristic_names
             assert "vulnerable_dependency" in heuristic_names
+            assert "unlinked_entrypoint" in heuristic_names
         finally:
             store.stop_watcher()

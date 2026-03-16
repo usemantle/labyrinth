@@ -10,6 +10,7 @@ from src.graph.edges.assumes_edge import AssumesEdge
 from src.graph.edges.contains_edge import ContainsEdge
 from src.graph.edges.protected_by_edge import ProtectedByEdge
 from src.graph.edges.references_edge import ReferencesEdge
+from src.graph.edges.routes_to_edge import RoutesToEdge
 from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
@@ -28,6 +29,7 @@ class EcsServiceNode(Node):
     })
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,
+        RoutesToEdge,
     })
 
     @classmethod

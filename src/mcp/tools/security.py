@@ -89,6 +89,68 @@ def _incoming_depends_on(store: GraphStore, dep_urn: str) -> list[tuple[str, dic
     ]
 
 
+def _trace_lb_to_services(store: GraphStore, lb_urn: str) -> list[dict]:
+    """Follow LB -> BG -> ECS service chain and collect service info."""
+    services = []
+    for _, bg_urn, data in store.G.out_edges(lb_urn, data=True):
+        if data.get("edge_type") != EdgeType.ROUTES_TO:
+            continue
+        bg_node = store.node_dict(bg_urn)
+        if not bg_node or bg_node["node_type"] != NodeType.BACKEND_GROUP:
+            continue
+        for _, svc_urn, svc_data in store.G.out_edges(bg_urn, data=True):
+            if svc_data.get("edge_type") != EdgeType.ROUTES_TO:
+                continue
+            svc_node = store.node_dict(svc_urn)
+            if not svc_node or svc_node["node_type"] != NodeType.ECS_SERVICE:
+                continue
+            svc_name = svc_node["metadata"].get("ecs_service_name", "?")
+            iam_roles = _collect_iam_roles(store, svc_urn)
+            services.append({"name": svc_name, "urn": svc_urn, "iam_roles": iam_roles})
+    return services
+
+
+def _collect_sg_rules(store: GraphStore, urn: str) -> list[str]:
+    """Collect security group descriptions for a node."""
+    sg_descriptions = []
+    for _, sg_urn, data in store.G.out_edges(urn, data=True):
+        if data.get("edge_type") != EdgeType.PROTECTED_BY:
+            continue
+        sg_node = store.node_dict(sg_urn)
+        if not sg_node:
+            continue
+        sg_name = sg_node["metadata"].get("sg_name", sg_node["urn"])
+        ingress = sg_node["metadata"].get("sg_rules_ingress", [])
+        # Check for 0.0.0.0/0 ingress
+        has_public = False
+        if isinstance(ingress, list):
+            for rule in ingress:
+                if isinstance(rule, dict) and rule.get("cidr") == "0.0.0.0/0":
+                    has_public = True
+                    break
+        label = f"{sg_name} [PUBLIC]" if has_public else sg_name
+        sg_descriptions.append(label)
+    return sg_descriptions
+
+
+def _collect_iam_roles(store: GraphStore, svc_urn: str) -> list[str]:
+    """Collect IAM role names from service -> task def -> role chain."""
+    roles = []
+    for _, td_urn, data in store.G.out_edges(svc_urn, data=True):
+        if data.get("edge_type") != EdgeType.REFERENCES:
+            continue
+        td_node = store.node_dict(td_urn)
+        if not td_node or td_node["node_type"] != NodeType.ECS_TASK_DEFINITION:
+            continue
+        for _, role_urn, role_data in store.G.out_edges(td_urn, data=True):
+            if role_data.get("edge_type") != EdgeType.ASSUMES:
+                continue
+            role_node = store.node_dict(role_urn)
+            if role_node:
+                roles.append(role_node["metadata"].get("role_name", role_node["urn"]))
+    return roles
+
+
 def register(mcp: FastMCP, store: GraphStore) -> None:
 
     # ── Feature 1: Sensitive Data ─────────────────────────────────────
@@ -463,5 +525,117 @@ def register(mcp: FastMCP, store: GraphStore) -> None:
                 auth_scheme = meta.get("auth_scheme")
                 auth_str = f"auth: {auth_scheme}" if auth_scheme else "no auth detected"
                 lines.append(f"    [depth={depth}] {method} {path} ({auth_str})")
+
+        return "\n".join(lines)
+
+    # ── Feature 6: Public Attack Surface ─────────────────────────────
+
+    @mcp.tool()
+    def find_public_attack_surface(include_internal: bool = False) -> str:
+        """Find all internet-reachable services by traversing the networking topology.
+
+        Traces: DNS records -> load balancers -> backend groups -> ECS services,
+        and also finds ECS services with public IPs (direct exposure).
+
+        Args:
+            include_internal: If True, include private DNS zones too. Default False.
+        """
+        attack_chains: list[dict] = []
+
+        # 1. Find public DNS records
+        dns_urns = store.nodes_by_type.get(NodeType.DNS_RECORD, [])
+        for dns_urn in dns_urns:
+            dns_node = store.node_dict(dns_urn)
+            if not dns_node:
+                continue
+            meta = dns_node["metadata"]
+
+            # Skip private zones unless include_internal
+            if not include_internal and meta.get("dns_zone_private", False):
+                continue
+
+            dns_name = meta.get("dns_record_name", "?")
+
+            # 2. Follow RESOLVES_TO -> LOAD_BALANCER
+            for _, to_urn, data in store.G.out_edges(dns_urn, data=True):
+                if data.get("edge_type") != EdgeType.RESOLVES_TO:
+                    continue
+
+                lb_node = store.node_dict(to_urn)
+                if not lb_node:
+                    continue
+                lb_meta = lb_node["metadata"]
+
+                # Filter to internet-facing
+                if lb_meta.get("lb_scheme") != "internet-facing":
+                    continue
+
+                lb_type = lb_meta.get("lb_type", "?")
+                lb_dns = lb_meta.get("lb_dns_name", "?")
+
+                # 3. Follow ROUTES_TO -> BACKEND_GROUP -> ROUTES_TO -> ECS_SERVICE
+                services = _trace_lb_to_services(store, to_urn)
+
+                # Collect SG info for the LB
+                sg_rules = _collect_sg_rules(store, to_urn)
+
+                chain = {
+                    "dns_name": dns_name,
+                    "lb_type": lb_type,
+                    "lb_scheme": "internet-facing",
+                    "lb_dns": lb_dns,
+                    "sg_rules": sg_rules,
+                    "services": services,
+                }
+                attack_chains.append(chain)
+
+        # 4. Find ECS services with public IPs (direct exposure)
+        direct_exposure: list[dict] = []
+        for svc_urn in store.nodes_by_type.get(NodeType.ECS_SERVICE, []):
+            svc_node = store.node_dict(svc_urn)
+            if not svc_node:
+                continue
+            if svc_node["metadata"].get("ecs_public_ip"):
+                svc_name = svc_node["metadata"].get("ecs_service_name", "?")
+                sg_rules = _collect_sg_rules(store, svc_urn)
+                iam_roles = _collect_iam_roles(store, svc_urn)
+                direct_exposure.append({
+                    "service_name": svc_name,
+                    "urn": svc_urn,
+                    "sg_rules": sg_rules,
+                    "iam_roles": iam_roles,
+                })
+
+        if not attack_chains and not direct_exposure:
+            return "No public attack surface found."
+
+        lines = ["Public attack surface:"]
+
+        if attack_chains:
+            lines.append(f"\n  DNS -> Load Balancer chains ({len(attack_chains)}):")
+            for chain in attack_chains:
+                lines.append(f"\n    DNS: {chain['dns_name']}")
+                lines.append(f"    LB: {chain['lb_type']} ({chain['lb_scheme']})")
+                lines.append(f"    LB DNS: {chain['lb_dns']}")
+                if chain["sg_rules"]:
+                    lines.append(f"    Security groups: {', '.join(chain['sg_rules'])}")
+                if chain["services"]:
+                    lines.append(f"    Target services ({len(chain['services'])}):")
+                    for svc in chain["services"]:
+                        lines.append(f"      - {svc['name']} (URN: {svc['urn']})")
+                        if svc.get("iam_roles"):
+                            lines.append(f"        IAM roles: {', '.join(svc['iam_roles'])}")
+                else:
+                    lines.append("    No target services resolved.")
+
+        if direct_exposure:
+            lines.append(f"\n  Directly exposed ECS services ({len(direct_exposure)}):")
+            for svc in direct_exposure:
+                lines.append(f"\n    Service: {svc['service_name']}")
+                lines.append(f"    URN: {svc['urn']}")
+                if svc["sg_rules"]:
+                    lines.append(f"    Security groups: {', '.join(svc['sg_rules'])}")
+                if svc["iam_roles"]:
+                    lines.append(f"    IAM roles: {', '.join(svc['iam_roles'])}")
 
         return "\n".join(lines)

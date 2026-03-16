@@ -46,6 +46,12 @@ def format_report(results: list[CandidateResult]) -> str:
                 lines.append(f"  {r.candidate.source_urn}")
                 lines.append(f"    Reason: {r.note}")
 
+    worktrees = [r for r in results if r.worktree_path]
+    if worktrees:
+        lines.append("\nWorktrees with changes:")
+        for r in worktrees:
+            lines.append(f"  {r.worktree_path} (branch {r.worktree_branch})")
+
     if any(r.outcome == "error" for r in results):
         lines.append("\nErrors:")
         for r in results:
@@ -70,6 +76,8 @@ def _serialize_result(r: CandidateResult) -> dict:
         "actions": actions,
         "links_evaluated": r.links_evaluated or [],
         "soft_link_id": r.soft_link_id,
+        "worktree_path": r.worktree_path,
+        "worktree_branch": r.worktree_branch,
     }
 
 

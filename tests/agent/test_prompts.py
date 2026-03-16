@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import tempfile
 
-from src.agent.candidates import Candidate
+from src.agent.candidates import Candidate, candidate_id
 from src.agent.prompts import build_investigation_prompt, build_system_prompt
 from src.mcp.graph_store import GraphStore
 
@@ -40,6 +40,7 @@ class TestBuildSystemPrompt:
 class TestBuildInvestigationPrompt:
     def test_contains_candidate_urn(self):
         candidate = Candidate(
+            id=candidate_id("urn:github:repo:org:::org/app/Dockerfile", "unlinked_dockerfile"),
             source_urn="urn:github:repo:org:::org/app/Dockerfile",
             source_node_type="file",
             source_metadata={"dockerfile_base_images": ["python:3.12"]},
@@ -67,6 +68,7 @@ class TestBuildInvestigationPrompt:
 
     def test_includes_task_instruction(self):
         candidate = Candidate(
+            id=candidate_id("urn:test", "unlinked_s3_code"),
             source_urn="urn:test",
             source_node_type="function",
             source_metadata={"aws_s3_operations": ["put_object"]},
@@ -84,6 +86,7 @@ class TestBuildInvestigationPrompt:
 
     def test_soft_link_action_includes_instructions(self):
         candidate = Candidate(
+            id=candidate_id("urn:test", "unlinked_dockerfile"),
             source_urn="urn:test",
             source_node_type="file",
             source_metadata={},
@@ -102,6 +105,7 @@ class TestBuildInvestigationPrompt:
 
     def test_create_pr_action_includes_instructions(self):
         candidate = Candidate(
+            id=candidate_id("urn:test", "vulnerable_dependency"),
             source_urn="urn:test",
             source_node_type="dependency",
             source_metadata={},
@@ -120,6 +124,7 @@ class TestBuildInvestigationPrompt:
 
     def test_embeds_skill_file(self):
         candidate = Candidate(
+            id=candidate_id("urn:test", "unlinked_dockerfile"),
             source_urn="urn:test",
             source_node_type="file",
             source_metadata={},
@@ -136,8 +141,51 @@ class TestBuildInvestigationPrompt:
         finally:
             store.stop_watcher()
 
+    def test_worktree_instructions_included(self):
+        candidate = Candidate(
+            id=candidate_id("urn:test", "insecure_endpoint"),
+            source_urn="urn:test",
+            source_node_type="function",
+            source_metadata={},
+            heuristic_name="insecure_endpoint",
+            terminal_actions=["mark_evaluated", "create_pr"],
+            skill_file="",
+        )
+        node = {"urn": "urn:test", "node_type": "function", "metadata": {}}
+        store = _make_store([node])
+        try:
+            prompt = build_investigation_prompt(
+                candidate, store,
+                worktree_path="/tmp/worktree-abc",
+                original_repo_root="/home/user/repo",
+            )
+            assert "Worktree isolation" in prompt
+            assert "/tmp/worktree-abc" in prompt
+            assert "/home/user/repo" in prompt
+        finally:
+            store.stop_watcher()
+
+    def test_no_worktree_instructions_without_path(self):
+        candidate = Candidate(
+            id=candidate_id("urn:test", "insecure_endpoint"),
+            source_urn="urn:test",
+            source_node_type="function",
+            source_metadata={},
+            heuristic_name="insecure_endpoint",
+            terminal_actions=["mark_evaluated", "create_pr"],
+            skill_file="",
+        )
+        node = {"urn": "urn:test", "node_type": "function", "metadata": {}}
+        store = _make_store([node])
+        try:
+            prompt = build_investigation_prompt(candidate, store)
+            assert "Worktree isolation" not in prompt
+        finally:
+            store.stop_watcher()
+
     def test_actions_shown_in_candidate_section(self):
         candidate = Candidate(
+            id=candidate_id("urn:test", "unlinked_dockerfile"),
             source_urn="urn:test",
             source_node_type="file",
             source_metadata={},

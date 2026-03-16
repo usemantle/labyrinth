@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.agent.candidates import Candidate
+from src.agent.candidates import Candidate, candidate_id
 from src.agent.heuristics._base import BaseHeuristic, TerminalAction
 from src.graph.graph_models import NodeMetadataKey, NodeType
 from src.mcp.graph_store import GraphStore
@@ -27,6 +27,7 @@ class InsecureEndpoint(BaseHeuristic):
                     continue
                 candidates.append(
                     Candidate(
+                        id=candidate_id(fn_urn, self.name),
                         source_urn=fn_urn,
                         source_node_type=self.source_node_type,
                         source_metadata=dict(meta),

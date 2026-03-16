@@ -6,7 +6,7 @@ import enum
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from src.agent.candidates import Candidate
+from src.agent.candidates import Candidate, candidate_id
 from src.mcp.graph_store import GraphStore
 
 SKILL_DIR = Path(__file__).resolve().parent.parent / "skills"
@@ -95,6 +95,7 @@ class BaseHeuristic(ABC):
                     continue
                 candidates.append(
                     Candidate(
+                        id=candidate_id(urn, self.name),
                         source_urn=urn,
                         source_node_type=self.source_node_type,
                         source_metadata=dict(meta),

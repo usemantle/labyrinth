@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import tempfile
 
-from src.agent.candidates import Candidate, filter_already_evaluated
+from src.agent.candidates import Candidate, candidate_id, filter_already_evaluated
 from src.mcp.graph_store import GraphStore
 
 
 def _make_candidate(source_urn: str, heuristic_name: str = "test") -> Candidate:
     return Candidate(
+        id=candidate_id(source_urn, heuristic_name),
         source_urn=source_urn,
         source_node_type="file",
         source_metadata={},
@@ -76,3 +77,18 @@ class TestFilterAlreadyEvaluated:
             assert filter_already_evaluated([], store) == []
         finally:
             store.stop_watcher()
+
+
+class TestCandidateId:
+    def test_deterministic(self):
+        id1 = candidate_id("urn:a", "test")
+        id2 = candidate_id("urn:a", "test")
+        assert id1 == id2
+
+    def test_unique_for_different_inputs(self):
+        id1 = candidate_id("urn:a", "test")
+        id2 = candidate_id("urn:b", "test")
+        id3 = candidate_id("urn:a", "other")
+        assert id1 != id2
+        assert id1 != id3
+        assert id2 != id3

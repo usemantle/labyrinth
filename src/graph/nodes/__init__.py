@@ -1,12 +1,14 @@
 """Typed node subclasses for the security graph."""
 
 from src.graph.nodes.aws_account_node import AwsAccountNode
+from src.graph.nodes.backend_group_node import BackendGroupNode
 from src.graph.nodes.bucket_node import BucketNode
 from src.graph.nodes.class_node import ClassNode
 from src.graph.nodes.codebase_node import CodebaseNode
 from src.graph.nodes.column_node import ColumnNode
 from src.graph.nodes.database_node import DatabaseNode
 from src.graph.nodes.dependency_node import DependencyNode
+from src.graph.nodes.dns_record_node import DnsRecordNode
 from src.graph.nodes.ecs_cluster_node import EcsClusterNode
 from src.graph.nodes.ecs_service_node import EcsServiceNode
 from src.graph.nodes.ecs_task_definition_node import EcsTaskDefinitionNode
@@ -18,6 +20,7 @@ from src.graph.nodes.iam_user_node import IamUserNode
 from src.graph.nodes.identity_node import IdentityNode
 from src.graph.nodes.image_node import ImageNode
 from src.graph.nodes.image_repository_node import ImageRepositoryNode
+from src.graph.nodes.load_balancer_node import LoadBalancerNode
 from src.graph.nodes.nacl_node import NaclNode
 from src.graph.nodes.object_path_node import ObjectPathNode
 from src.graph.nodes.rds_cluster_node import RdsClusterNode
@@ -29,12 +32,14 @@ from src.graph.nodes.vpc_node import VpcNode
 
 __all__ = [
     "AwsAccountNode",
+    "BackendGroupNode",
     "BucketNode",
     "ClassNode",
     "CodebaseNode",
     "ColumnNode",
     "DatabaseNode",
     "DependencyNode",
+    "DnsRecordNode",
     "EcsClusterNode",
     "EcsServiceNode",
     "EcsTaskDefinitionNode",
@@ -46,6 +51,7 @@ __all__ = [
     "IdentityNode",
     "ImageNode",
     "ImageRepositoryNode",
+    "LoadBalancerNode",
     "NaclNode",
     "ObjectPathNode",
     "RdsClusterNode",

@@ -41,6 +41,7 @@ const state = {
   // Reports / dashboard
   reports: { runs: [] },
   _dashboardLoaded: false,
+  _heuristicsLoaded: false,
 
   // Callbacks (set by graph-app.js)
   requestRefresh: () => {},

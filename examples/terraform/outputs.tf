@@ -30,12 +30,24 @@ output "vpc_id" {
   value = aws_vpc.main.id
 }
 
+output "alb_dns_name" {
+  value = aws_lb.app.dns_name
+}
+
+output "api_gateway_endpoint" {
+  value = aws_apigatewayv2_api.app.api_endpoint
+}
+
+output "api_url" {
+  value = "https://api.${var.hosted_zone_name}"
+}
+
 output "labyrinth_target_config" {
   description = "TOML snippet to paste into labyrinth project config"
   value       = <<-EOT
     [[targets]]
     urn = "urn:aws:account:${data.aws_caller_identity.current.account_id}:${var.aws_region}:root"
-    plugins = ["s3", "rds", "ecr", "ecs", "vpc", "iam"]
+    plugins = ["s3", "rds", "ecr", "ecs", "vpc", "iam", "route53", "elbv2", "apigateway"]
 
     [targets.credentials]
     type = "aws_profile"

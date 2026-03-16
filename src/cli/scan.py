@@ -12,7 +12,13 @@ from src.graph.graph_models import URN, Edge, Node
 from src.graph.loaders import LOADER_REGISTRY
 from src.graph.loaders.loader import ConceptLoader
 from src.graph.sinks.sink import Sink
-from src.graph.stitching import stitch_aws_resources, stitch_code_to_data, stitch_code_to_images
+from src.graph.stitching import (
+    stitch_aws_resources,
+    stitch_code_to_data,
+    stitch_code_to_images,
+    stitch_dockerfile_entrypoints,
+    stitch_networking,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -142,8 +148,18 @@ def run_scan(
         project_id, all_nodes, all_edges,
     )
 
+    # Stitch Dockerfile -> entrypoint executes edges.
+    all_nodes, all_edges = stitch_dockerfile_entrypoints(
+        project_id, all_nodes, all_edges,
+    )
+
     # Stitch AWS cross-service edges (RDS->database, ECS->ECR, etc.)
     all_nodes, all_edges = stitch_aws_resources(
+        project_id, all_nodes, all_edges,
+    )
+
+    # Stitch networking topology (DNS->LB, BG->ECS, etc.)
+    all_nodes, all_edges = stitch_networking(
         project_id, all_nodes, all_edges,
     )
 

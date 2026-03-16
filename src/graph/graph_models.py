@@ -36,6 +36,11 @@ class NodeType(enum.StrEnum):
     IMAGE_REPOSITORY = "image_repository"
     IMAGE = "image"
 
+    # Networking
+    DNS_RECORD = "dns_record"
+    LOAD_BALANCER = "load_balancer"
+    BACKEND_GROUP = "backend_group"
+
     # Security
     SECURITY_GROUP = "security_group"
     NACL = "nacl"
@@ -62,6 +67,7 @@ class EdgeType(enum.StrEnum):
     INSTANTIATES = "instantiates"
     DEPENDS_ON = "depends_on"
     BUILDS = "builds"
+    EXECUTES = "executes"
     READS = "reads"
     WRITES = "writes"
     MODELS = "models"
@@ -72,6 +78,8 @@ class EdgeType(enum.StrEnum):
     ATTACHES = "attaches"
     MEMBER_OF = "member_of"
     PROTECTED_BY = "protected_by"
+    RESOLVES_TO = "resolves_to"
+    ROUTES_TO = "routes_to"
     UNKNOWN = "unknown"
 
 
@@ -177,6 +185,10 @@ class NodeMetadataKey(enum.StrEnum):
     OCI_SOURCE = "oci_source"
     OCI_REVISION = "oci_revision"
     DOCKERFILE_BASE_IMAGES = "dockerfile_base_images"
+    DOCKERFILE_ENTRYPOINT = "dockerfile_entrypoint"
+    DOCKERFILE_CMD = "dockerfile_cmd"
+    DOCKERFILE_WORKDIR = "dockerfile_workdir"
+    DOCKERFILE_COPY_TARGETS = "dockerfile_copy_targets"
 
     # ── RDS ─────────────────────────────────────────────────────────────
     RDS_ENGINE = "rds_engine"
@@ -222,6 +234,41 @@ class NodeMetadataKey(enum.StrEnum):
     SSO_GROUP_ID = "sso_group_id"
     SSO_GROUP_NAME = "sso_group_name"
 
+    # ── DNS ──────────────────────────────────────────────────────────────
+    DNS_RECORD_NAME = "dns_record_name"
+    DNS_RECORD_TYPE = "dns_record_type"
+    DNS_ZONE_NAME = "dns_zone_name"
+    DNS_ZONE_PRIVATE = "dns_zone_private"
+    DNS_ZONE_ID = "dns_zone_id"
+    DNS_TTL = "dns_ttl"
+    DNS_VALUES = "dns_values"
+
+    # ── Load balancer ────────────────────────────────────────────────────
+    LB_TYPE = "lb_type"
+    LB_SCHEME = "lb_scheme"
+    LB_DNS_NAME = "lb_dns_name"
+    LB_LISTENERS = "lb_listeners"
+    LB_STATE = "lb_state"
+
+    # ── Backend group ────────────────────────────────────────────────────
+    BG_NAME = "bg_name"
+    BG_PORT = "bg_port"
+    BG_PROTOCOL = "bg_protocol"
+    BG_TARGET_TYPE = "bg_target_type"
+    BG_HEALTH_CHECK = "bg_health_check"
+    BG_BACKEND_TYPE = "bg_backend_type"
+
+    # ── API Gateway ──────────────────────────────────────────────────────
+    API_GW_STAGE = "api_gw_stage"
+    API_GW_ENDPOINT_TYPE = "api_gw_endpoint_type"
+    API_GW_AUTH_TYPE = "api_gw_auth_type"
+    API_GW_CUSTOM_DOMAINS = "api_gw_custom_domains"
+    API_GW_INTEGRATION_URIS = "api_gw_integration_uris"
+
+    # ── ECS networking ───────────────────────────────────────────────────
+    ECS_TARGET_GROUP_ARNS = "ecs_target_group_arns"
+    ECS_PUBLIC_IP = "ecs_public_ip"
+
 
 class EdgeMetadataKey(enum.StrEnum):
     """Valid keys for Edge metadata dictionaries."""
@@ -252,6 +299,10 @@ class EdgeMetadataKey(enum.StrEnum):
     SG_RULE_PROTOCOL = "sg_rule_protocol"
     SG_RULE_PORT_RANGE = "sg_rule_port_range"
     SG_RULE_DIRECTION = "sg_rule_direction"
+
+    # ── Networking ────────────────────────────────────────────────────
+    LISTENER_PORT = "listener_port"
+    LISTENER_PROTOCOL = "listener_protocol"
 
 
 class _EnumKeyDict:

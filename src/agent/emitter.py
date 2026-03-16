@@ -12,9 +12,15 @@ from src.agent.action_log import ActionCollector
 from src.agent.candidates import Candidate, CandidateResult
 from src.agent.heuristics._base import TERMINAL_ACTION_MCP_SERVERS, TerminalAction
 from src.agent.prompts import build_investigation_prompt, build_system_prompt
+from src.agent.worktree import cleanup_worktree, create_worktree, resolve_repo_root, worktree_has_changes
 from src.mcp.graph_store import GraphStore
 
 logger = logging.getLogger(__name__)
+
+
+def _needs_worktree(candidate: Candidate) -> bool:
+    """Return True if the candidate's terminal actions may modify the filesystem."""
+    return str(TerminalAction.CREATE_PR) in candidate.terminal_actions
 
 
 def _collect_mcp_servers(candidate: Candidate, graph_path: str) -> dict:
@@ -73,7 +79,6 @@ async def emit_candidate(
     project_dir: Path,
 ) -> CandidateResult:
     """Invoke a Claude agent to investigate a single candidate."""
-    prompt = build_investigation_prompt(candidate, store, project_dir)
     system = build_system_prompt()
 
     agent_result_text = ""
@@ -82,11 +87,46 @@ async def emit_candidate(
     graph_path = str(project_dir / "graph.json")
     mcp_servers = _collect_mcp_servers(candidate, graph_path)
 
+    # Create a worktree if the candidate may modify files
+    worktree_path: Path | None = None
+    worktree_branch: str | None = None
+    repo_root: Path | None = None
+
+    if _needs_worktree(candidate):
+        repo_root = resolve_repo_root(candidate.source_urn, project_dir)
+        if repo_root:
+            worktree_dir = project_dir / ".worktrees"
+            try:
+                worktree_path, worktree_branch = create_worktree(repo_root, worktree_dir)
+                logger.info(
+                    "Agent will operate in worktree %s (branch %s)",
+                    worktree_path, worktree_branch,
+                )
+            except Exception:
+                logger.exception("Failed to create worktree for %s", repo_root)
+                worktree_path = None
+                worktree_branch = None
+        else:
+            logger.warning(
+                "Could not resolve git repo root for %s; agent will use primary worktree",
+                candidate.source_urn,
+            )
+
+    prompt = build_investigation_prompt(
+        candidate, store, project_dir,
+        worktree_path=str(worktree_path) if worktree_path else None,
+        original_repo_root=str(repo_root) if repo_root else None,
+    )
+
+    # When a worktree is active, set cwd to the worktree so the agent
+    # operates there by default instead of the original repo.
+    agent_cwd = str(worktree_path) if worktree_path else str(project_dir)
+
     try:
         async for message in query(
             prompt=prompt,
             options=ClaudeAgentOptions(
-                cwd=str(project_dir),
+                cwd=agent_cwd,
                 allowed_tools=["Read", "Grep", "Glob", "Bash"],
                 mcp_servers=mcp_servers,
                 permission_mode="bypassPermissions",
@@ -104,6 +144,9 @@ async def emit_candidate(
                 )
     except Exception:
         logger.exception("Agent error for %s", candidate.source_urn)
+        # Clean up worktree on error
+        if worktree_path and repo_root and worktree_branch:
+            cleanup_worktree(repo_root, worktree_path, worktree_branch)
         return CandidateResult(
             candidate=candidate,
             outcome="error",
@@ -120,6 +163,18 @@ async def emit_candidate(
     else:
         outcome = "rejected"
 
+    # Clean up worktree if no changes were made
+    wt_path_str: str | None = None
+    wt_branch_str: str | None = None
+    if worktree_path and repo_root and worktree_branch:
+        if worktree_has_changes(worktree_path):
+            wt_path_str = str(worktree_path)
+            wt_branch_str = worktree_branch
+            logger.info("Worktree %s has changes, keeping for review", worktree_path)
+        else:
+            cleanup_worktree(repo_root, worktree_path, worktree_branch)
+            logger.info("Worktree had no changes, cleaned up")
+
     # Generate a summary of the investigation
     agent_summary = await _generate_summary(agent_result_text, collector)
 
@@ -131,6 +186,8 @@ async def emit_candidate(
         agent_summary=agent_summary,
         soft_link_id=collector.extract_soft_link_id(),
         links_evaluated=collector.extract_links_evaluated() or None,
+        worktree_path=wt_path_str,
+        worktree_branch=wt_branch_str,
     )
 
 

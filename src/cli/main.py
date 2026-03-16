@@ -365,6 +365,15 @@ def serve(port: int) -> None:
     else:
         (staging_dir / "reports.json").write_text(json.dumps({"runs": []}, indent=2) + "\n")
 
+    # Copy heuristics.json (or write empty default)
+    heuristics_path = project_dir / "heuristics.json"
+    if heuristics_path.exists():
+        shutil.copy2(heuristics_path, staging_dir / "heuristics.json")
+    else:
+        (staging_dir / "heuristics.json").write_text(
+            json.dumps({"analyzed_at": None, "graph_generated_at": None, "candidates": []}, indent=2) + "\n"
+        )
+
     handler = partial(SimpleHTTPRequestHandler, directory=str(staging_dir))
     server = HTTPServer(("localhost", port), handler)
 
@@ -389,42 +398,12 @@ def agent() -> None:
     """Autonomous agent commands."""
 
 
-def _build_heuristic_help() -> str:
-    """Build the help text listing all registered heuristics."""
-    from src.agent.heuristics import ALL_HEURISTICS
-
-    lines = ["Run the discovery agent.", "", "\b", "Available heuristics:"]
-    max_name = max(len(h.name) for h in ALL_HEURISTICS)
-    for h in sorted(ALL_HEURISTICS, key=lambda h: h.name):
-        actions = ", ".join(str(a) for a in h.terminal_actions)
-        lines.append(f"  {h.name:<{max_name}}  [{actions}]")
-    return "\n".join(lines)
-
-
 @agent.command()
-@click.option("--dry-run", is_flag=True, help="Show candidates without invoking the agent.")
-@click.option(
-    "--heuristic", "-H",
-    multiple=True,
-    default=None,
-    help="Run only the named heuristic(s). Can be specified multiple times. Omit to run all.",
-)
-def run(dry_run: bool, heuristic: tuple[str, ...]) -> None:
+def analyze() -> None:
+    """Run all heuristics against the knowledge graph and save findings."""
     import asyncio
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-
-    from src.agent.heuristics import HEURISTICS_BY_NAME
-
-    heuristic_names: list[str] | None = None
-    if heuristic:
-        unknown = [h for h in heuristic if h not in HEURISTICS_BY_NAME]
-        if unknown:
-            valid = ", ".join(sorted(HEURISTICS_BY_NAME))
-            raise click.ClickException(
-                f"Unknown heuristic(s): {', '.join(unknown)}. Valid: {valid}"
-            )
-        heuristic_names = list(heuristic)
 
     project = _get_active_project()
     project_dir = PROJECTS_DIR / project
@@ -435,12 +414,31 @@ def run(dry_run: bool, heuristic: tuple[str, ...]) -> None:
             f"No graph.json found for project '{project}'. Run 'labyrinth scan' first."
         )
 
-    from src.agent.runner import run_discovery
+    from src.agent.runner import run_analysis
 
-    asyncio.run(run_discovery(project_dir, dry_run=dry_run, heuristic_names=heuristic_names))
+    asyncio.run(run_analysis(project_dir))
 
 
-run.help = _build_heuristic_help()
+@agent.command()
+@click.argument("candidate_id")
+def run(candidate_id: str) -> None:
+    """Execute the agent against a single candidate by its UUID."""
+    import asyncio
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+    project = _get_active_project()
+    project_dir = PROJECTS_DIR / project
+    graph_path = project_dir / "graph.json"
+
+    if not graph_path.exists():
+        raise click.ClickException(
+            f"No graph.json found for project '{project}'. Run 'labyrinth scan' first."
+        )
+
+    from src.agent.runner import run_single_candidate
+
+    asyncio.run(run_single_candidate(project_dir, candidate_id))
 
 
 # ── Config commands ───────────────────────────────────────────────────

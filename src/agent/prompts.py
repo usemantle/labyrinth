@@ -40,7 +40,14 @@ def build_system_prompt() -> str:
     )
 
 
-def build_investigation_prompt(candidate: Candidate, store: GraphStore, project_dir: Path | None = None) -> str:
+def build_investigation_prompt(
+    candidate: Candidate,
+    store: GraphStore,
+    project_dir: Path | None = None,
+    *,
+    worktree_path: str | None = None,
+    original_repo_root: str | None = None,
+) -> str:
     """Construct a per-candidate investigation prompt."""
     parts: list[str] = []
 
@@ -52,7 +59,22 @@ def build_investigation_prompt(candidate: Candidate, store: GraphStore, project_
     parts.append(f"- **Actions:** {', '.join(candidate.terminal_actions)}")
     parts.append(f"\n### Metadata\n```\n{candidate.source_metadata}\n```\n")
 
-    # 2. Task description — pulled from the heuristic class
+    # 2. Worktree isolation instructions
+    if worktree_path and original_repo_root:
+        parts.append("## Worktree isolation\n")
+        parts.append(
+            "A git worktree has been created for this investigation. "
+            "**All file modifications MUST be made in the worktree, not the original repository.**\n"
+        )
+        parts.append(f"- **Original repo:** `{original_repo_root}`")
+        parts.append(f"- **Worktree path:** `{worktree_path}`")
+        parts.append(
+            "\nYou may read files from the original repo for investigation, but any edits, "
+            "commits, or branch operations must happen in the worktree path. "
+            "When using Bash to run git commands or edit files, always `cd` to the worktree first.\n"
+        )
+
+    # 3. Task description — pulled from the heuristic class
     heuristic = HEURISTICS_BY_NAME.get(candidate.heuristic_name)
     instruction = (
         heuristic.get_instructions()
@@ -61,13 +83,13 @@ def build_investigation_prompt(candidate: Candidate, store: GraphStore, project_
     )
     parts.append(f"## Task\n\n{instruction}\n")
 
-    # 3. Skill content (if available)
+    # 4. Skill content (if available)
     if heuristic:
         playbook = heuristic.get_playbook()
         if playbook:
             parts.append(f"## Investigation playbook\n\n{playbook}\n")
 
-    # 4. Available nodes for soft link heuristics
+    # 5. Available nodes for soft link heuristics
     actions = [TerminalAction(a) for a in candidate.terminal_actions]
     if TerminalAction.CREATE_SOFT_LINK in actions:
         with store.lock:
@@ -78,7 +100,7 @@ def build_investigation_prompt(candidate: Candidate, store: GraphStore, project_
                 parts.append(f"- `{urn}`")
             parts.append("")
 
-    # 5. Post-investigation actions — assembled from terminal actions
+    # 6. Post-investigation actions — assembled from terminal actions
     parts.append("## Post-investigation actions\n")
     parts.append(
         "Use the MCP knowledge tools and codebase tools to investigate. "

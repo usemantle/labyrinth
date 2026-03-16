@@ -10,16 +10,20 @@ ImageRepositoryNodes using OCI label matching and name heuristics.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import uuid
 from pathlib import Path
 
 from src.graph.edges.builds_edge import BuildsEdge
+from src.graph.edges.executes_edge import ExecutesEdge
 from src.graph.edges.hosts_edge import HostsEdge
 from src.graph.edges.models_edge import ModelsEdge
 from src.graph.edges.reads_edge import ReadsEdge
 from src.graph.edges.references_edge import ReferencesEdge
+from src.graph.edges.resolves_to_edge import ResolvesToEdge
+from src.graph.edges.routes_to_edge import RoutesToEdge
 from src.graph.graph_models import (
     URN,
     Edge,
@@ -312,6 +316,214 @@ def stitch_code_to_images(
     return all_nodes, all_edges
 
 
+# ── Dockerfile entrypoint stitching ──────────────────────────────────
+
+
+# Runners/interpreters to skip when extracting the file argument
+_KNOWN_RUNNERS = frozenset({
+    "python", "python3", "node", "uvicorn", "gunicorn",
+    "java", "npm", "sh", "bash", "ruby", "perl", "php",
+    "dotnet", "go", "run", "exec", "deno", "uv", "npx",
+    "poetry", "pipenv", "conda",
+})
+
+
+def _parse_exec_form(raw: str) -> list[str]:
+    """Parse a JSON exec-form instruction like '["python", "src/main.py"]'."""
+    raw = raw.strip()
+    if raw.startswith("["):
+        try:
+            parts = json.loads(raw)
+            if isinstance(parts, list):
+                return [str(p) for p in parts]
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return []
+
+
+def _parse_shell_form(raw: str) -> list[str]:
+    """Parse a shell-form instruction like 'python src/main.py'."""
+    return raw.strip().split()
+
+
+def _extract_target_file(raw_instruction: str) -> str | None:
+    """Extract the target file path from an ENTRYPOINT or CMD instruction.
+
+    Returns None if the target cannot be determined (variables, ambiguous).
+    """
+    parts = _parse_exec_form(raw_instruction)
+    if not parts:
+        parts = _parse_shell_form(raw_instruction)
+    if not parts:
+        return None
+
+    # Skip known runners to find the actual file argument
+    file_arg = None
+    for part in parts:
+        # Skip flags (start with -)
+        if part.startswith("-"):
+            continue
+        # Skip known runners
+        basename = part.rsplit("/", 1)[-1]  # handle /usr/bin/python
+        if basename in _KNOWN_RUNNERS:
+            continue
+        file_arg = part
+        break
+
+    if not file_arg:
+        return None
+
+    # Skip if it contains variable substitution
+    if "$" in file_arg or "%" in file_arg:
+        return None
+
+    # Handle Python module notation: app.main:app -> app/main.py, main:app -> main.py
+    if ":" in file_arg and not file_arg.startswith("/"):
+        module_part = file_arg.split(":")[0]
+        if "/" not in module_part:
+            file_arg = module_part.replace(".", "/") + ".py"
+
+    return file_arg
+
+
+def _resolve_container_path_to_codebase(
+    file_arg: str,
+    workdir: str | None,
+    copy_targets: list[str],
+) -> str:
+    """Map a container-internal path back to a codebase-relative path.
+
+    Uses WORKDIR and COPY destination mappings to strip container prefixes.
+    """
+    # Normalize: remove leading /
+    path = file_arg.lstrip("/")
+
+    # If WORKDIR is set and the path is relative, it's relative to WORKDIR
+    # The common pattern: WORKDIR /app, COPY . ., CMD python src/main.py
+    # In this case src/main.py is already codebase-relative
+    if not file_arg.startswith("/"):
+        # Relative path — likely already codebase-relative when COPY . . is used
+        return path
+
+    # Absolute path — try to strip WORKDIR prefix
+    if workdir:
+        wd = workdir.strip("/")
+        if path.startswith(wd + "/"):
+            return path[len(wd) + 1:]
+        if path == wd:
+            return ""
+
+    # Try COPY destination mappings
+    for dest in copy_targets:
+        dest_norm = dest.strip("/")
+        if dest_norm and path.startswith(dest_norm + "/"):
+            return path[len(dest_norm) + 1:]
+
+    return path
+
+
+def stitch_dockerfile_entrypoints(
+    organization_id: uuid.UUID,
+    all_nodes: list[Node],
+    all_edges: list[Edge],
+) -> tuple[list[Node], list[Edge]]:
+    """Create ExecutesEdge links between Dockerfile FileNodes and their entrypoint files.
+
+    Parses ENTRYPOINT/CMD instructions to determine which code file a Dockerfile
+    runs, then creates an ``executes`` edge to that file.
+
+    Args:
+        organization_id: Tenant identifier.
+        all_nodes: Combined node list.
+        all_edges: Combined edge list.
+
+    Returns:
+        The same (nodes, edges) with ExecutesEdge entries appended.
+    """
+    NK = NodeMetadataKey
+
+    # Build registries
+    dockerfiles: list[Node] = []
+    # Map codebase URN -> {relative_path -> file URN}
+    file_nodes_by_codebase: dict[str, dict[str, URN]] = {}
+    # Map file URN -> parent codebase URN
+    file_to_codebase: dict[str, str] = {}
+    # Contains edges: parent -> child
+    contains_children: dict[str, list[str]] = {}
+
+    for edge in all_edges:
+        if edge.edge_type == "contains":
+            contains_children.setdefault(str(edge.from_urn), []).append(str(edge.to_urn))
+
+    for node in all_nodes:
+        if node.node_type == NodeType.FILE:
+            has_entrypoint = NK.DOCKERFILE_ENTRYPOINT in node.metadata
+            has_cmd = NK.DOCKERFILE_CMD in node.metadata
+            if has_entrypoint or has_cmd:
+                dockerfiles.append(node)
+
+            # Index all files by their codebase for lookup
+            if node.parent_urn and NK.FILE_PATH in node.metadata:
+                codebase_key = str(node.parent_urn)
+                file_nodes_by_codebase.setdefault(codebase_key, {})
+                rel_path = node.metadata[NK.FILE_PATH]
+                file_nodes_by_codebase[codebase_key][rel_path] = node.urn
+                file_to_codebase[str(node.urn)] = codebase_key
+
+    if not dockerfiles:
+        return all_nodes, all_edges
+
+    edge_count = 0
+
+    for df_node in dockerfiles:
+        # Determine entrypoint command (prefer ENTRYPOINT, fall back to CMD)
+        raw = df_node.metadata.get(NK.DOCKERFILE_ENTRYPOINT)
+        if not raw:
+            raw = df_node.metadata.get(NK.DOCKERFILE_CMD)
+        if not raw:
+            continue
+
+        target_file = _extract_target_file(raw)
+        if not target_file:
+            continue
+
+        # Get WORKDIR and COPY context
+        workdir = df_node.metadata.get(NK.DOCKERFILE_WORKDIR)
+        copy_targets_raw = df_node.metadata.get(NK.DOCKERFILE_COPY_TARGETS, "")
+        copy_targets = [t for t in copy_targets_raw.split(",") if t] if copy_targets_raw else []
+
+        # Resolve container path to codebase-relative path
+        resolved_path = _resolve_container_path_to_codebase(
+            target_file, workdir, copy_targets,
+        )
+
+        if not resolved_path:
+            continue
+
+        # Find the parent codebase of this Dockerfile
+        codebase_key = str(df_node.parent_urn) if df_node.parent_urn else None
+        if not codebase_key:
+            continue
+
+        file_registry = file_nodes_by_codebase.get(codebase_key, {})
+        target_urn = file_registry.get(resolved_path)
+
+        if target_urn:
+            all_edges.append(ExecutesEdge.create(
+                organization_id,
+                df_node.urn,
+                target_urn,
+                metadata=EdgeMetadata({
+                    EdgeMetadataKey.DETECTION_METHOD: "static_parse",
+                    EdgeMetadataKey.CONFIDENCE: 0.9,
+                }),
+            ))
+            edge_count += 1
+
+    logger.info("Created %d Dockerfile -> entrypoint executes edges", edge_count)
+    return all_nodes, all_edges
+
+
 def _normalize_url(url: str) -> str:
     """Normalize a git/repository URL for comparison."""
     url = url.rstrip("/")
@@ -408,4 +620,157 @@ def stitch_aws_resources(
                 edge_count += 1
 
     logger.info("Created %d AWS cross-service stitching edges", edge_count)
+    return all_nodes, all_edges
+
+
+# ── Networking stitching ─────────────────────────────────────────────
+
+
+def _normalize_lb_dns(dns_name: str) -> str:
+    """Normalize a load balancer DNS name for comparison.
+
+    Strips scheme prefixes (https://) and trailing dots/slashes.
+    """
+    name = dns_name.lower().strip()
+    # Strip scheme prefix (API Gateway stores https://...)
+    name = re.sub(r"^https?://", "", name)
+    name = name.rstrip("./")
+    return name
+
+
+def stitch_networking(
+    organization_id: uuid.UUID,
+    all_nodes: list[Node],
+    all_edges: list[Edge],
+) -> tuple[list[Node], list[Edge]]:
+    """Create cross-service edges for the networking topology.
+
+    Stitching rules:
+    1. DNS -> LB: Match DNS alias/CNAME values to LoadBalancerNode lb_dns_name
+       (also matches API Gateway custom domain DNS names)
+    2. API GW -> ALB: Match API Gateway integration URIs (listener ARNs) to
+       ALB listener ARNs
+
+    Args:
+        organization_id: Tenant identifier.
+        all_nodes: Combined node list.
+        all_edges: Combined edge list.
+
+    Returns:
+        The same (nodes, edges) with networking edges appended.
+    """
+    NK = NodeMetadataKey
+
+    # Build registries
+    lb_by_dns: dict[str, URN] = {}  # normalized dns_name -> LB URN
+    dns_records: list[Node] = []
+    bg_by_arn: dict[str, URN] = {}  # target group ARN -> BG URN
+    ecs_services: list[Node] = []
+    api_gw_nodes: list[Node] = []  # API Gateway LB nodes with integrations
+    lb_by_listener_arn: dict[str, URN] = {}  # listener ARN -> LB URN
+
+    for node in all_nodes:
+        if node.node_type == NodeType.LOAD_BALANCER:
+            dns_name = node.metadata.get(NK.LB_DNS_NAME, "")
+            if dns_name:
+                lb_by_dns[_normalize_lb_dns(dns_name)] = node.urn
+
+            # Also index API Gateway custom domain DNS names
+            custom_domains = node.metadata.get(NK.API_GW_CUSTOM_DOMAINS, [])
+            if isinstance(custom_domains, list):
+                for cd in custom_domains:
+                    lb_by_dns[_normalize_lb_dns(cd)] = node.urn
+
+            # Track API GW nodes with integration URIs
+            if node.metadata.get(NK.API_GW_INTEGRATION_URIS):
+                api_gw_nodes.append(node)
+
+            # Index LB listeners by ARN for API GW -> ALB matching
+            listeners = node.metadata.get(NK.LB_LISTENERS, [])
+            lb_arn = node.metadata.get(NK.ARN, "")
+            if isinstance(listeners, list) and lb_arn:
+                # Build listener ARNs from LB ARN pattern
+                # Listener ARNs follow: {lb_arn_base}/listener/{id}
+                # We can't know exact listener ARN from LB data alone,
+                # so we index the LB ARN prefix for prefix matching
+                lb_by_listener_arn[lb_arn] = node.urn
+
+        elif node.node_type == NodeType.DNS_RECORD:
+            dns_records.append(node)
+
+        elif node.node_type == NodeType.BACKEND_GROUP:
+            arn = node.metadata.get(NK.ARN, "")
+            if arn:
+                bg_by_arn[arn] = node.urn
+
+        elif node.node_type == NodeType.ECS_SERVICE:
+            ecs_services.append(node)
+
+    edge_count = 0
+
+    # 1. DNS -> LB: match alias/CNAME values to LB DNS names
+    for dns_node in dns_records:
+        values = dns_node.metadata.get(NK.DNS_VALUES, [])
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            normalized = _normalize_lb_dns(value)
+            lb_urn = lb_by_dns.get(normalized)
+            if lb_urn:
+                all_edges.append(ResolvesToEdge.create(
+                    organization_id, dns_node.urn, lb_urn,
+                    metadata=EdgeMetadata({
+                        EdgeMetadataKey.DETECTION_METHOD: "dns_alias_match",
+                        EdgeMetadataKey.CONFIDENCE: 1.0,
+                    }),
+                ))
+                edge_count += 1
+
+    # 2. API GW -> ALB: match integration URIs (listener ARNs) to LB ARNs
+    # LB ARN:       arn:aws:elasticloadbalancing:...:loadbalancer/app/lb-name/id
+    # Listener ARN: arn:aws:elasticloadbalancing:...:listener/app/lb-name/id/listener-id
+    # We extract the LB path (app/lb-name/id) and check if the integration
+    # URI contains it as a listener ARN.
+    for apigw_node in api_gw_nodes:
+        integration_uris = apigw_node.metadata.get(NK.API_GW_INTEGRATION_URIS, [])
+        if not isinstance(integration_uris, list):
+            continue
+        for uri in integration_uris:
+            for lb_arn, lb_urn in lb_by_listener_arn.items():
+                # Extract the path after "loadbalancer/" in the LB ARN
+                lb_marker = "loadbalancer/"
+                lb_idx = lb_arn.find(lb_marker)
+                if lb_idx < 0:
+                    continue
+                lb_path = lb_arn[lb_idx + len(lb_marker):]
+                # Check if integration URI is a listener for this LB
+                if f"listener/{lb_path}" in uri:
+                    all_edges.append(RoutesToEdge.create(
+                        organization_id, apigw_node.urn, lb_urn,
+                        metadata=EdgeMetadata({
+                            EdgeMetadataKey.DETECTION_METHOD: "apigw_integration_match",
+                            EdgeMetadataKey.CONFIDENCE: 1.0,
+                        }),
+                    ))
+                    edge_count += 1
+                    break
+
+    # 3. BG -> ECS: match target group ARNs from ECS service loadBalancers config
+    for svc_node in ecs_services:
+        tg_arns = svc_node.metadata.get(NK.ECS_TARGET_GROUP_ARNS, [])
+        if not isinstance(tg_arns, list):
+            continue
+        for tg_arn in tg_arns:
+            bg_urn = bg_by_arn.get(tg_arn)
+            if bg_urn:
+                all_edges.append(RoutesToEdge.create(
+                    organization_id, bg_urn, svc_node.urn,
+                    metadata=EdgeMetadata({
+                        EdgeMetadataKey.DETECTION_METHOD: "ecs_target_group_match",
+                        EdgeMetadataKey.CONFIDENCE: 1.0,
+                    }),
+                ))
+                edge_count += 1
+
+    logger.info("Created %d networking stitching edges", edge_count)
     return all_nodes, all_edges

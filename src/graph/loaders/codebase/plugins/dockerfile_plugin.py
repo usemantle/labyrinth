@@ -31,6 +31,12 @@ _FROM_RE = re.compile(
     re.MULTILINE,
 )
 
+# Regex for ENTRYPOINT, CMD, WORKDIR, COPY directives
+_ENTRYPOINT_RE = re.compile(r"^\s*ENTRYPOINT\s+(.*)", re.MULTILINE)
+_CMD_RE = re.compile(r"^\s*CMD\s+(.*)", re.MULTILINE)
+_WORKDIR_RE = re.compile(r"^\s*WORKDIR\s+(\S+)", re.MULTILINE)
+_COPY_RE = re.compile(r"^\s*COPY\s+(?:--[^\s]+\s+)*(.+?)\s+(\S+)\s*$", re.MULTILINE)
+
 # Regex for LABEL directives (key=value or key="value")
 _LABEL_RE = re.compile(
     r'^\s*LABEL\s+(.*)',
@@ -60,6 +66,46 @@ def _parse_labels(content: str) -> dict[str, str]:
             value = kv_match.group(2) if kv_match.group(2) is not None else kv_match.group(3)
             labels[key] = value
     return labels
+
+
+def _extract_final_stage(content: str) -> str:
+    """Return content after the last FROM line (final stage of multi-stage build)."""
+    lines = content.split("\n")
+    last_from_idx = 0
+    for i, line in enumerate(lines):
+        if re.match(r"^\s*FROM\s+", line, re.IGNORECASE):
+            last_from_idx = i
+    return "\n".join(lines[last_from_idx:])
+
+
+def _parse_entrypoint(content: str) -> str | None:
+    """Extract the ENTRYPOINT instruction from the final stage."""
+    final = _extract_final_stage(content)
+    match = _ENTRYPOINT_RE.search(final)
+    return match.group(1).strip() if match else None
+
+
+def _parse_cmd(content: str) -> str | None:
+    """Extract the CMD instruction from the final stage."""
+    final = _extract_final_stage(content)
+    match = _CMD_RE.search(final)
+    return match.group(1).strip() if match else None
+
+
+def _parse_workdir(content: str) -> str | None:
+    """Extract the last WORKDIR from the final stage."""
+    final = _extract_final_stage(content)
+    matches = _WORKDIR_RE.findall(final)
+    return matches[-1] if matches else None
+
+
+def _parse_copy_targets(content: str) -> list[str]:
+    """Extract COPY destination paths from the final stage."""
+    final = _extract_final_stage(content)
+    targets: list[str] = []
+    for match in _COPY_RE.finditer(final):
+        targets.append(match.group(2))
+    return targets
 
 
 class DockerfilePlugin(CodebasePlugin):
@@ -131,5 +177,20 @@ class DockerfilePlugin(CodebasePlugin):
 
             if file_node is not None:
                 file_node.metadata[NK.DOCKERFILE_BASE_IMAGES] = ",".join(base_images)
+
+                # Extract entrypoint-related metadata
+                entrypoint = _parse_entrypoint(content)
+                cmd = _parse_cmd(content)
+                workdir = _parse_workdir(content)
+                copy_targets = _parse_copy_targets(content)
+
+                if entrypoint:
+                    file_node.metadata[NK.DOCKERFILE_ENTRYPOINT] = entrypoint
+                if cmd:
+                    file_node.metadata[NK.DOCKERFILE_CMD] = cmd
+                if workdir:
+                    file_node.metadata[NK.DOCKERFILE_WORKDIR] = workdir
+                if copy_targets:
+                    file_node.metadata[NK.DOCKERFILE_COPY_TARGETS] = ",".join(copy_targets)
 
         return nodes, edges
