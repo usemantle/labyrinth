@@ -140,9 +140,16 @@ class AwsAccountLoader(ConceptLoader):
 
         # Resolve account ID — use URN or STS
         account_id = urn.account
+        sts = session.client("sts")
+        resolved_account = sts.get_caller_identity()["Account"]
+
         if not account_id or account_id == "x":
-            sts = session.client("sts")
-            account_id = sts.get_caller_identity()["Account"]
+            account_id = resolved_account
+        elif resolved_account != account_id:
+            raise ValueError(
+                f"AWS profile resolves to account {resolved_account} but target "
+                f"URN specifies {account_id}. Check your AWS profile configuration."
+            )
 
         # Instantiate plugins from kwargs if provided by scan.py
         plugins: list[AwsResourcePlugin] = kwargs.get("plugins", [])

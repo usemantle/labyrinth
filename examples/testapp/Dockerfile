@@ -9,7 +9,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --no-dev --no-install-project
 
-COPY main.py .
+COPY main.py s3_wrapper.py ./
 
 EXPOSE 8000
 

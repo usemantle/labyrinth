@@ -136,6 +136,10 @@ class TestAwsAccountLoaderFromConfig:
         mock_session = MagicMock()
         mock_boto3.Session.return_value = mock_session
 
+        mock_sts = MagicMock()
+        mock_sts.get_caller_identity.return_value = {"Account": "123456789012"}
+        mock_session.client.return_value = mock_sts
+
         urn = URN("urn:aws:account:123456789012:us-east-1:root")
         credentials = {"type": "aws_profile", "profile": "prod"}
 
@@ -147,3 +151,18 @@ class TestAwsAccountLoaderFromConfig:
         mock_boto3.Session.assert_called_once_with(
             profile_name="prod", region_name="us-east-1",
         )
+
+    @patch("src.graph.loaders.aws.loader.boto3")
+    def test_from_target_config_account_mismatch_raises(self, mock_boto3):
+        mock_session = MagicMock()
+        mock_boto3.Session.return_value = mock_session
+
+        mock_sts = MagicMock()
+        mock_sts.get_caller_identity.return_value = {"Account": "999999999999"}
+        mock_session.client.return_value = mock_sts
+
+        urn = URN("urn:aws:account:123456789012:us-east-1:root")
+        credentials = {"type": "aws_profile", "profile": "prod"}
+
+        with pytest.raises(ValueError, match="999999999999"):
+            AwsAccountLoader.from_target_config(ORG_ID, urn, credentials)
