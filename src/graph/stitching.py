@@ -20,6 +20,7 @@ from src.graph.edges.builds_edge import BuildsEdge
 from src.graph.edges.executes_edge import ExecutesEdge
 from src.graph.edges.hosts_edge import HostsEdge
 from src.graph.edges.models_edge import ModelsEdge
+from src.graph.edges.protected_by_edge import ProtectedByEdge
 from src.graph.edges.reads_edge import ReadsEdge
 from src.graph.edges.references_edge import ReferencesEdge
 from src.graph.edges.resolves_to_edge import ResolvesToEdge
@@ -29,6 +30,7 @@ from src.graph.graph_models import (
     Edge,
     EdgeMetadata,
     EdgeMetadataKey,
+    EdgeType,
     Node,
     NodeMetadata,
     NodeMetadataKey,
@@ -618,6 +620,42 @@ def stitch_aws_resources(
                     }),
                 ))
                 edge_count += 1
+
+    # 3. Resolve "unknown" VPC security group URNs in ProtectedByEdge edges.
+    #    ECS and ELBv2 plugins don't know the VPC ID when creating edges, so
+    #    they use "unknown" as a placeholder.  Replace with the real SG URN.
+    sg_by_id: dict[str, URN] = {}  # sg_id -> real URN
+    for node in all_nodes:
+        if node.node_type == NodeType.SECURITY_GROUP:
+            sg_id = node.metadata.get(NK.SG_ID, "")
+            if sg_id:
+                sg_by_id[sg_id] = node.urn
+    if sg_by_id:
+        resolved_count = 0
+        new_edges: list[Edge] = []
+        drop_indices: list[int] = []
+        for i, edge in enumerate(all_edges):
+            if edge.edge_type != EdgeType.PROTECTED_BY:
+                continue
+            to_str = str(edge.to_urn)
+            if ":unknown/sg/" not in to_str:
+                continue
+            # Extract sg_id from urn:aws:vpc:{acct}:{region}:unknown/sg/{sg_id}
+            sg_id = to_str.rsplit("/sg/", 1)[-1]
+            real_urn = sg_by_id.get(sg_id)
+            if real_urn:
+                new_edges.append(ProtectedByEdge.create(
+                    organization_id, edge.from_urn, real_urn,
+                    metadata=edge.metadata,
+                ))
+                drop_indices.append(i)
+                resolved_count += 1
+        # Remove old edges (iterate in reverse to preserve indices)
+        for i in reversed(drop_indices):
+            all_edges.pop(i)
+        all_edges.extend(new_edges)
+        if resolved_count:
+            logger.info("Resolved %d security group URNs from 'unknown' placeholders", resolved_count)
 
     logger.info("Created %d AWS cross-service stitching edges", edge_count)
     return all_nodes, all_edges

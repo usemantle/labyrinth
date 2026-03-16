@@ -38,14 +38,14 @@ function applyLayout(graph, layout) {
       break;
     case "forceatlas2":
     default:
-      circular.assign(graph);
+      // circular.assign(graph);
       forceAtlas2.assign(graph, {
-        iterations: 80,
+        iterations: 50,
         settings: {
           barnesHutOptimize: true,
           strongGravityMode: false,
-          gravity: 1,
-          scalingRatio: 80,
+          gravity: 5,
+          scalingRatio: 200,
         },
       });
       break;
