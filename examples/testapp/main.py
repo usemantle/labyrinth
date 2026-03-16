@@ -31,7 +31,10 @@ def ping():
 
 
 @app.get("/files/{file_path:path}")
-async def get_file(file_path: str):
+async def get_file(file_path: str, _token: str = Security(_verify_token)):
+    # Reject path traversal sequences before forwarding to the storage service.
+    if ".." in file_path.split("/"):
+        raise HTTPException(status_code=400, detail="Invalid file path")
     async with aiohttp.ClientSession() as session:
         async with session.get(f"http://storage-service:8080/files/{file_path}") as resp:
             content = await resp.read()
