@@ -12,13 +12,14 @@ import networkx as nx
 
 from src.graph.graph_models import EdgeType, NodeType
 from src.graph.sinks.json_file_sink import JsonFileSink
+from src.graph.store import GraphStoreBase
 
 logger = logging.getLogger(__name__)
 
 EDGE_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "dsec:graph:edge")
 
 
-class GraphStore:
+class GraphStore(GraphStoreBase):
     """Loads serialized graph JSON into a NetworkX MultiDiGraph with
     lightweight secondary indices for frequent type-based lookups.
 
