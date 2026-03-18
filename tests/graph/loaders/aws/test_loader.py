@@ -131,8 +131,8 @@ class TestAwsAccountLoaderLoad:
 
 
 class TestAwsAccountLoaderFromConfig:
-    @patch("src.graph.loaders.aws.loader.boto3")
-    def test_from_target_config(self, mock_boto3):
+    @patch("src.graph.loaders.aws.boto3")
+    def test_from_target_config_with_profile(self, mock_boto3):
         mock_session = MagicMock()
         mock_boto3.Session.return_value = mock_session
 
@@ -152,7 +152,35 @@ class TestAwsAccountLoaderFromConfig:
             profile_name="prod", region_name="us-east-1",
         )
 
-    @patch("src.graph.loaders.aws.loader.boto3")
+    @patch("src.graph.loaders.aws.boto3")
+    def test_from_target_config_with_temp_credentials(self, mock_boto3):
+        mock_session = MagicMock()
+        mock_boto3.Session.return_value = mock_session
+
+        mock_sts = MagicMock()
+        mock_sts.get_caller_identity.return_value = {"Account": "123456789012"}
+        mock_session.client.return_value = mock_sts
+
+        urn = URN("urn:aws:account:123456789012:us-east-1:root")
+        credentials = {
+            "type": "aws_profile",
+            "aws_access_key_id": "AKIAIOSFODNN7EXAMPLE",
+            "aws_secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            "aws_session_token": "FwoGZXIvYXdzEBY...",
+        }
+
+        loader, resource = AwsAccountLoader.from_target_config(
+            ORG_ID, urn, credentials,
+        )
+        assert isinstance(loader, AwsAccountLoader)
+        mock_boto3.Session.assert_called_once_with(
+            aws_access_key_id="AKIAIOSFODNN7EXAMPLE",
+            aws_secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            aws_session_token="FwoGZXIvYXdzEBY...",
+            region_name="us-east-1",
+        )
+
+    @patch("src.graph.loaders.aws.boto3")
     def test_from_target_config_account_mismatch_raises(self, mock_boto3):
         mock_session = MagicMock()
         mock_boto3.Session.return_value = mock_session

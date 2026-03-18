@@ -11,7 +11,7 @@ from src.mcp.graph_store import GraphStore
 class UnlinkedEntrypoint(BaseHeuristic):
     name = "unlinked_entrypoint"
     source_node_type = NodeType.FILE
-    metadata_key = ""  # Custom find() logic
+    metadata_keys = []  # Custom find() logic
     terminal_actions = [TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_SOFT_LINK]
     skill_file = "link-dockerfile-to-entrypoint.md"
 
@@ -49,8 +49,7 @@ class UnlinkedEntrypoint(BaseHeuristic):
                 )
         return candidates
 
-    @classmethod
-    def get_instructions(cls) -> str:
+    def get_instructions(self) -> str:
         return (
             "This Dockerfile has an ENTRYPOINT or CMD instruction but no outgoing `executes` "
             "edge to a code file. Investigate which source file is the container entrypoint "

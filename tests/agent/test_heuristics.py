@@ -9,6 +9,7 @@ import pytest
 
 from src.agent.candidates import candidate_id
 from src.agent.heuristics import (
+    ConfigurableHeuristic,
     InsecureEndpoint,
     OrphanedEcrRepo,
     UnlinkedDockerfile,
@@ -97,7 +98,7 @@ class TestUnlinkedDockerfile:
             store.stop_watcher()
 
     def test_get_instructions(self):
-        instructions = UnlinkedDockerfile.get_instructions()
+        instructions = self.heuristic.get_instructions()
         assert "Dockerfile" in instructions
         assert "builds" in instructions
 
@@ -133,7 +134,7 @@ class TestUnlinkedS3Code:
             store.stop_watcher()
 
     def test_get_instructions(self):
-        instructions = UnlinkedS3Code.get_instructions()
+        instructions = self.heuristic.get_instructions()
         assert "S3" in instructions
         assert "aws_s3_operations" in instructions
 
@@ -164,7 +165,7 @@ class TestOrphanedEcrRepo:
             store.stop_watcher()
 
     def test_get_instructions(self):
-        instructions = OrphanedEcrRepo.get_instructions()
+        instructions = self.heuristic.get_instructions()
         assert "ECR" in instructions
         assert "builds" in instructions
 
@@ -359,7 +360,7 @@ class TestUnlinkedEntrypoint:
             store.stop_watcher()
 
     def test_get_instructions(self):
-        instructions = UnlinkedEntrypoint.get_instructions()
+        instructions = self.heuristic.get_instructions()
         assert "ENTRYPOINT" in instructions
         assert "executes" in instructions
 
@@ -413,3 +414,168 @@ class TestGatherAll:
             assert "unlinked_entrypoint" in heuristic_names
         finally:
             store.stop_watcher()
+
+    def test_extra_heuristics_included(self):
+        node = {
+            "urn": "urn:github:repo:org:::org/app/src/main.py::my_func",
+            "node_type": "function",
+            "metadata": {"custom_flag": True},
+        }
+        extra = ConfigurableHeuristic(
+            name="my_custom",
+            source_node_type="function",
+            metadata_keys=["custom_flag"],
+            terminal_actions=[TerminalAction.MARK_EVALUATED],
+        )
+        store = _make_store([node])
+        try:
+            candidates = gather_all_candidates(store, extra_heuristics=[extra])
+            names = {c.heuristic_name for c in candidates}
+            assert "my_custom" in names
+        finally:
+            store.stop_watcher()
+
+
+class TestConfigurableHeuristic:
+    def test_or_logic_matches_any_key(self):
+        node = {
+            "urn": "urn:test:node:1",
+            "node_type": "function",
+            "metadata": {"key_a": "val"},
+        }
+        h = ConfigurableHeuristic(
+            name="test_or",
+            source_node_type="function",
+            metadata_keys=["key_a", "key_b"],
+            terminal_actions=[TerminalAction.MARK_EVALUATED],
+            metadata_key_op="OR",
+        )
+        store = _make_store([node])
+        try:
+            assert len(h.find(store)) == 1
+        finally:
+            store.stop_watcher()
+
+    def test_or_logic_misses_no_keys(self):
+        node = {
+            "urn": "urn:test:node:1",
+            "node_type": "function",
+            "metadata": {"other_key": "val"},
+        }
+        h = ConfigurableHeuristic(
+            name="test_or",
+            source_node_type="function",
+            metadata_keys=["key_a", "key_b"],
+            terminal_actions=[TerminalAction.MARK_EVALUATED],
+            metadata_key_op="OR",
+        )
+        store = _make_store([node])
+        try:
+            assert h.find(store) == []
+        finally:
+            store.stop_watcher()
+
+    def test_and_logic_requires_all_keys(self):
+        node_both = {
+            "urn": "urn:test:node:both",
+            "node_type": "function",
+            "metadata": {"key_a": "val", "key_b": "val"},
+        }
+        node_one = {
+            "urn": "urn:test:node:one",
+            "node_type": "function",
+            "metadata": {"key_a": "val"},
+        }
+        h = ConfigurableHeuristic(
+            name="test_and",
+            source_node_type="function",
+            metadata_keys=["key_a", "key_b"],
+            terminal_actions=[TerminalAction.MARK_EVALUATED],
+            metadata_key_op="AND",
+        )
+        store = _make_store([node_both, node_one])
+        try:
+            candidates = h.find(store)
+            assert len(candidates) == 1
+            assert candidates[0].source_urn == "urn:test:node:both"
+        finally:
+            store.stop_watcher()
+
+    def test_empty_metadata_keys_matches_all(self):
+        nodes = [
+            {"urn": "urn:test:node:1", "node_type": "function", "metadata": {}},
+            {"urn": "urn:test:node:2", "node_type": "function", "metadata": {"x": 1}},
+        ]
+        h = ConfigurableHeuristic(
+            name="test_all",
+            source_node_type="function",
+            metadata_keys=[],
+            terminal_actions=[TerminalAction.MARK_EVALUATED],
+        )
+        store = _make_store(nodes)
+        try:
+            assert len(h.find(store)) == 2
+        finally:
+            store.stop_watcher()
+
+    def test_get_instructions_uses_provided_text(self):
+        h = ConfigurableHeuristic(
+            name="test",
+            source_node_type="function",
+            metadata_keys=[],
+            terminal_actions=[TerminalAction.MARK_EVALUATED],
+            instructions="Custom investigation text.",
+        )
+        assert h.get_instructions() == "Custom investigation text."
+
+    def test_get_instructions_auto_generated(self):
+        h = ConfigurableHeuristic(
+            name="test",
+            source_node_type="file",
+            metadata_keys=["foo", "bar"],
+            terminal_actions=[TerminalAction.MARK_EVALUATED],
+            metadata_key_op="AND",
+        )
+        instr = h.get_instructions()
+        assert "file" in instr
+        assert "(AND)" in instr
+        assert "foo" in instr
+        assert "bar" in instr
+
+    def test_serialization_roundtrip(self):
+        h = ConfigurableHeuristic(
+            name="roundtrip",
+            source_node_type="dependency",
+            metadata_keys=["cve_ids", "severity"],
+            terminal_actions=[TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_PR],
+            metadata_key_op="AND",
+            instructions="Check CVEs.",
+            skill_content="## Playbook\nInvestigate CVEs.",
+        )
+        restored = ConfigurableHeuristic.from_dict(h.to_dict())
+        assert restored.name == h.name
+        assert restored.source_node_type == h.source_node_type
+        assert restored.metadata_keys == h.metadata_keys
+        assert restored.metadata_key_op == h.metadata_key_op
+        assert restored.terminal_actions == h.terminal_actions
+        assert restored.instructions == h.instructions
+        assert restored.skill_content == h.skill_content
+
+    def test_get_playbook_returns_skill_content(self):
+        h = ConfigurableHeuristic(
+            name="test",
+            source_node_type="function",
+            metadata_keys=[],
+            terminal_actions=[TerminalAction.MARK_EVALUATED],
+            skill_content="## My Playbook",
+        )
+        assert h.get_playbook() == "## My Playbook"
+
+    def test_get_playbook_returns_none_when_empty(self):
+        h = ConfigurableHeuristic(
+            name="test",
+            source_node_type="function",
+            metadata_keys=[],
+            terminal_actions=[TerminalAction.MARK_EVALUATED],
+        )
+        assert h.get_playbook() is None

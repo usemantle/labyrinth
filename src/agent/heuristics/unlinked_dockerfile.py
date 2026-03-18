@@ -9,12 +9,11 @@ from src.graph.graph_models import NodeType
 class UnlinkedDockerfile(BaseHeuristic):
     name = "unlinked_dockerfile"
     source_node_type = NodeType.FILE
-    metadata_key = "dockerfile_base_images"
+    metadata_keys = ["dockerfile_base_images"]
     terminal_actions = [TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_SOFT_LINK]
     skill_file = "link-dockerfile-to-ecr.md"
 
-    @classmethod
-    def get_instructions(cls) -> str:
+    def get_instructions(self) -> str:
         return (
             "This Dockerfile exists in the graph but has no outgoing `builds` edge to an "
             "image_repository node. Investigate whether this Dockerfile builds one of the "
