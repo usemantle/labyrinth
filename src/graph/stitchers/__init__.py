@@ -27,3 +27,13 @@ STITCHER_REGISTRY: list[type[Stitcher]] = [
 RESOLVER_REGISTRY: list[type[Resolver]] = [
     SecurityGroupResolver,
 ]
+
+
+def register_stitcher(stitcher_cls: type[Stitcher]) -> None:
+    """Register an external stitcher class."""
+    STITCHER_REGISTRY.append(stitcher_cls)
+
+
+def register_resolver(resolver_cls: type[Resolver]) -> None:
+    """Register an external resolver class."""
+    RESOLVER_REGISTRY.append(resolver_cls)

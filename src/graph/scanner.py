@@ -17,26 +17,14 @@ from src.graph.stitchers import RESOLVER_REGISTRY, STITCHER_REGISTRY
 
 logger = logging.getLogger(__name__)
 
-# ── URN → loader dispatch ────────────────────────────────────────────
-
-_URN_DISPATCH: dict[tuple[str, str], type[ConceptLoader]] = {}
-
-for _loader_cls in LOADER_REGISTRY:
-    _dummy_components = {c.name: c.default or "x" for c in _loader_cls.urn_components()}
-    _dummy_urn = _loader_cls.build_target_urn(**_dummy_components)
-    _URN_DISPATCH[(_dummy_urn.provider, _dummy_urn.service)] = _loader_cls
-
-
-def _resolve_loader(urn: URN) -> type[ConceptLoader]:
-    """Look up the loader class for a given target URN."""
-    key = (urn.provider, urn.service)
-    loader_cls = _URN_DISPATCH.get(key)
-    if loader_cls is None:
-        raise ValueError(
-            f"No loader registered for URN scheme {key[0]}:{key[1]}. "
-            f"Known schemes: {sorted(_URN_DISPATCH.keys())}"
-        )
-    return loader_cls
+def _build_urn_dispatch() -> dict[tuple[str, str], type[ConceptLoader]]:
+    """Build dispatch table from current LOADER_REGISTRY (includes dynamically registered loaders)."""
+    dispatch: dict[tuple[str, str], type[ConceptLoader]] = {}
+    for loader_cls in LOADER_REGISTRY:
+        dummy_components = {c.name: c.default or "x" for c in loader_cls.urn_components()}
+        dummy_urn = loader_cls.build_target_urn(**dummy_components)
+        dispatch[(dummy_urn.provider, dummy_urn.service)] = loader_cls
+    return dispatch
 
 
 # ── Codebase target detection ────────────────────────────────────────
@@ -90,6 +78,18 @@ class Scanner:
         self.sink = sink
         self.project_dir = project_dir
         self.global_config = global_config or {}
+        self._urn_dispatch = _build_urn_dispatch()
+
+    def _resolve_loader(self, urn: URN) -> type[ConceptLoader]:
+        """Look up the loader class for a given target URN."""
+        key = (urn.provider, urn.service)
+        loader_cls = self._urn_dispatch.get(key)
+        if loader_cls is None:
+            raise ValueError(
+                f"No loader registered for URN scheme {key[0]}:{key[1]}. "
+                f"Known schemes: {sorted(self._urn_dispatch.keys())}"
+            )
+        return loader_cls
 
     def run(self) -> None:
         graph, context = self._ingest()
@@ -123,7 +123,7 @@ class Scanner:
         """Load a single target. Returns (graph, resource_string, is_codebase)."""
         urn = URN(target["urn"])
         credentials = target.get("credentials", {})
-        loader_cls = _resolve_loader(urn)
+        loader_cls = self._resolve_loader(urn)
 
         logger.info("Scanning %s with %s...", urn, loader_cls.display_name())
 

@@ -10,3 +10,8 @@ LOADER_REGISTRY: list[type[ConceptLoader]] = [
     FileSystemCodebaseLoader,
     GitCodebaseLoader,
 ]
+
+
+def register_loader(loader_cls: type[ConceptLoader]) -> None:
+    """Register an external loader class so the scanner can dispatch to it."""
+    LOADER_REGISTRY.append(loader_cls)

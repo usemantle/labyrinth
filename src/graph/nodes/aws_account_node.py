@@ -21,7 +21,9 @@ class AwsAccountNode(Node):
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,
     })
-    _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset()
+    _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({
+        ContainsEdge,
+    })
 
     @classmethod
     def create(
@@ -31,12 +33,24 @@ class AwsAccountNode(Node):
         parent_urn: URN | None = None,
         *,
         account_id: str,
-        region: str,
+        region: str = "",
+        account_name: str | None = None,
+        account_email: str | None = None,
+        account_status: str | None = None,
+        account_joined_method: str | None = None,
     ) -> AwsAccountNode:
         meta = NodeMetadata({
             NK.ACCOUNT_ID: account_id,
             NK.REGION: region,
         })
+        if account_name is not None:
+            meta[NK.ACCOUNT_NAME] = account_name
+        if account_email is not None:
+            meta[NK.ACCOUNT_EMAIL] = account_email
+        if account_status is not None:
+            meta[NK.ACCOUNT_STATUS] = account_status
+        if account_joined_method is not None:
+            meta[NK.ACCOUNT_JOINED_METHOD] = account_joined_method
         return cls(
             organization_id=organization_id,
             urn=urn,
