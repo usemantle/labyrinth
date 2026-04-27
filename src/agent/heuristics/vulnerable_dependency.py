@@ -9,12 +9,11 @@ from src.graph.graph_models import NodeMetadataKey, NodeType
 class VulnerableDependency(BaseHeuristic):
     name = "vulnerable_dependency"
     source_node_type = NodeType.DEPENDENCY
-    metadata_key = NodeMetadataKey.CVE_IDS
+    metadata_keys = [NodeMetadataKey.CVE_IDS]
     terminal_actions = [TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_PR]
     skill_file = "remediate-vulnerable-dependency.md"
 
-    @classmethod
-    def get_instructions(cls) -> str:
+    def get_instructions(self) -> str:
         return (
             "This dependency has known CVEs. Investigate the severity of the "
             "vulnerabilities, determine if a fixed version is available, and "

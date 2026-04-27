@@ -133,10 +133,9 @@ class AwsAccountLoader(ConceptLoader):
     def from_target_config(
         cls, project_id: uuid.UUID, urn: URN, credentials: dict, **kwargs,
     ) -> tuple[AwsAccountLoader, str]:
-        session = boto3.Session(
-            profile_name=credentials.get("profile", "default"),
-            region_name=urn.region,
-        )
+        from src.graph.loaders.aws import session_from_credentials
+
+        session = session_from_credentials(credentials, region_name=urn.region)
 
         # Resolve account ID — use URN or STS
         account_id = urn.account
@@ -146,9 +145,27 @@ class AwsAccountLoader(ConceptLoader):
         if not account_id or account_id == "x":
             account_id = resolved_account
         elif resolved_account != account_id:
-            raise ValueError(
-                f"AWS profile resolves to account {resolved_account} but target "
-                f"URN specifies {account_id}. Check your AWS profile configuration."
+            # Credential is for a different account — assume OrganizationAccountAccessRole,
+            # the role AWS auto-creates in member accounts for org management access.
+            role_arn = f"arn:aws:iam::{account_id}:role/OrganizationAccountAccessRole"
+            logger.info(
+                "Credential resolves to account %s; target is %s — assuming %s",
+                resolved_account, account_id, role_arn,
+            )
+            try:
+                assumed = sts.assume_role(RoleArn=role_arn, RoleSessionName="labyrinth-scan")
+            except Exception as exc:
+                raise ValueError(
+                    f"Credential resolves to account {resolved_account} but target URN specifies "
+                    f"{account_id}. Attempted to assume {role_arn} but it failed: {exc}. "
+                    "Assign a credential scoped to this account or configure cross-account assume_role."
+                ) from exc
+            temp = assumed["Credentials"]
+            session = boto3.Session(
+                aws_access_key_id=temp["AccessKeyId"],
+                aws_secret_access_key=temp["SecretAccessKey"],
+                aws_session_token=temp["SessionToken"],
+                region_name=urn.region,
             )
 
         # Instantiate plugins from kwargs if provided by scan.py

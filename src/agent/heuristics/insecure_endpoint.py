@@ -11,7 +11,7 @@ from src.mcp.graph_store import GraphStore
 class InsecureEndpoint(BaseHeuristic):
     name = "insecure_endpoint"
     source_node_type = NodeType.FUNCTION
-    metadata_key = NodeMetadataKey.HTTP_METHOD
+    metadata_keys = [NodeMetadataKey.HTTP_METHOD]
     terminal_actions = [TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_PR]
     skill_file = "detect-insecure-endpoint.md"
 
@@ -38,8 +38,7 @@ class InsecureEndpoint(BaseHeuristic):
                 )
         return candidates
 
-    @classmethod
-    def get_instructions(cls) -> str:
+    def get_instructions(self) -> str:
         return (
             "This HTTP endpoint has no detected authentication scheme. Investigate "
             "whether it handles unsanitized user input, is vulnerable to path traversal "

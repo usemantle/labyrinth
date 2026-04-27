@@ -5,6 +5,7 @@ from __future__ import annotations
 import enum
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Literal
 
 from src.agent.candidates import Candidate, candidate_id
 from src.mcp.graph_store import GraphStore
@@ -51,13 +52,13 @@ TERMINAL_ACTION_MCP_SERVERS: dict[TerminalAction, dict] = {
 class BaseHeuristic(ABC):
     """A heuristic detects candidate nodes worth investigating.
 
-    Subclasses define what to look for (source node type, metadata key),
+    Subclasses define what to look for (source node type, metadata keys),
     the terminal actions, and how to investigate (instructions + optional playbook).
 
     The default ``find()`` implementation covers the common pattern:
-    iterate all nodes of ``source_node_type``, check for ``metadata_key``
-    presence, and emit a ``Candidate`` for each match.  Override ``find()``
-    for heuristics that need custom logic.
+    iterate all nodes of ``source_node_type``, check for ``metadata_keys``
+    presence (AND/OR logic), and emit a ``Candidate`` for each match.  Override
+    ``find()`` for heuristics that need custom logic.
     """
 
     # ── Identity ──
@@ -65,13 +66,15 @@ class BaseHeuristic(ABC):
 
     # ── What to search ──
     source_node_type: str  # e.g. "file", "function", "class"
-    metadata_key: str  # metadata key whose presence triggers this heuristic
+    metadata_keys: list[str] = []  # metadata keys whose presence triggers this heuristic
+    metadata_key_op: Literal["AND", "OR"] = "OR"  # how to combine multiple keys
 
     # ── Terminal actions ──
     terminal_actions: list[TerminalAction] = [TerminalAction.MARK_EVALUATED]
 
-    # ── Skill file (optional) ──
+    # ── Skill file / content (optional) ──
     skill_file: str = ""
+    skill_content: str = ""  # inline skill text (overrides skill_file if set)
 
     @property
     def needs_github(self) -> bool:
@@ -84,15 +87,19 @@ class BaseHeuristic(ABC):
     def find(self, store: GraphStore) -> list[Candidate]:
         """Scan the graph for nodes matching this heuristic.
 
-        Default: iterate nodes of ``source_node_type``, check for
-        ``metadata_key`` in metadata, emit a Candidate for each match.
+        Default: iterate nodes of ``source_node_type``, evaluate ``metadata_keys``
+        with AND/OR logic, emit a Candidate for each match.
         """
         candidates: list[Candidate] = []
         with store.lock:
             for urn in store.nodes_by_type.get(self.source_node_type, []):
                 meta = store.G.nodes[urn].get("metadata", {})
-                if self.metadata_key and self.metadata_key not in meta:
-                    continue
+                if self.metadata_keys:
+                    keys_present = [k for k in self.metadata_keys if k in meta]
+                    if self.metadata_key_op == "AND" and len(keys_present) != len(self.metadata_keys):
+                        continue
+                    if self.metadata_key_op == "OR" and not keys_present:
+                        continue
                 candidates.append(
                     Candidate(
                         id=candidate_id(urn, self.name),
@@ -106,13 +113,14 @@ class BaseHeuristic(ABC):
                 )
         return candidates
 
-    @classmethod
     @abstractmethod
-    def get_instructions(cls) -> str:
+    def get_instructions(self) -> str:
         """Return investigation instructions for the agent."""
 
     def get_playbook(self) -> str | None:
-        """Return the skill file content, or None if no skill file is set."""
+        """Return the skill content, or None if neither skill_content nor skill_file is set."""
+        if self.skill_content:
+            return self.skill_content
         if not self.skill_file:
             return None
         path = SKILL_DIR / self.skill_file

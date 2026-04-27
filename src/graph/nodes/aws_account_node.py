@@ -34,26 +34,17 @@ class AwsAccountNode(Node):
         *,
         account_id: str,
         region: str = "",
-        account_name: str | None = None,
-        account_email: str | None = None,
-        account_status: str | None = None,
-        account_joined_method: str | None = None,
+        **meta: str,
     ) -> AwsAccountNode:
-        meta = NodeMetadata({
+        metadata = NodeMetadata({
             NK.ACCOUNT_ID: account_id,
             NK.REGION: region,
         })
-        if account_name is not None:
-            meta[NK.ACCOUNT_NAME] = account_name
-        if account_email is not None:
-            meta[NK.ACCOUNT_EMAIL] = account_email
-        if account_status is not None:
-            meta[NK.ACCOUNT_STATUS] = account_status
-        if account_joined_method is not None:
-            meta[NK.ACCOUNT_JOINED_METHOD] = account_joined_method
+        for k, v in meta.items():
+            metadata[k] = v
         return cls(
             organization_id=organization_id,
             urn=urn,
             parent_urn=parent_urn,
-            metadata=meta,
+            metadata=metadata,
         )

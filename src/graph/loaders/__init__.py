@@ -14,4 +14,5 @@ LOADER_REGISTRY: list[type[ConceptLoader]] = [
 
 def register_loader(loader_cls: type[ConceptLoader]) -> None:
     """Register an external loader class so the scanner can dispatch to it."""
-    LOADER_REGISTRY.append(loader_cls)
+    if loader_cls not in LOADER_REGISTRY:
+        LOADER_REGISTRY.append(loader_cls)

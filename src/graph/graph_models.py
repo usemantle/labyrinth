@@ -269,12 +269,6 @@ class NodeMetadataKey(enum.StrEnum):
     ECS_TARGET_GROUP_ARNS = "ecs_target_group_arns"
     ECS_PUBLIC_IP = "ecs_public_ip"
 
-    # ── AWS Organization ──────────────────────────────────────────────────
-    ACCOUNT_NAME = "account_name"
-    ACCOUNT_EMAIL = "account_email"
-    ACCOUNT_STATUS = "account_status"
-    ACCOUNT_JOINED_METHOD = "account_joined_method"
-
 
 class EdgeMetadataKey(enum.StrEnum):
     """Valid keys for Edge metadata dictionaries."""
