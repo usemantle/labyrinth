@@ -1,10 +1,10 @@
-"""Stitcher: Okta PersonNode -> AWS SsoUserNode via IdpMapsToEdge."""
+"""Stitcher: Okta PersonNode -> AWS SsoUserNode via OktaMapsToEdge."""
 
 from __future__ import annotations
 
 import uuid
 
-from src.graph.edges.idp_maps_to_edge import IdpMapsToEdge
+from src.graph.edges.okta_edges import OktaMapsToEdge
 from src.graph.graph_models import (
     URN,
     EdgeMetadata,
@@ -27,7 +27,7 @@ class OktaToIdentityCenterStitcher(Stitcher):
          (set when Okta is the SCIM provisioner for AWS Identity Center; strongest signal).
       2. SsoUser.email == Person.email (case-insensitive).
 
-    Emits IdpMapsToEdge(Person -> SsoUser) with provenance metadata.
+    Emits OktaMapsToEdge(Person -> SsoUser) with provenance metadata.
     """
 
     def stitch(self, organization_id: uuid.UUID, graph: Graph, context: dict) -> Graph:
@@ -68,7 +68,7 @@ class OktaToIdentityCenterStitcher(Stitcher):
                 continue
 
             confidence = 1.0 if match_key == "externalId" else 0.85
-            result.edges.append(IdpMapsToEdge.create(
+            result.edges.append(OktaMapsToEdge.create(
                 organization_id=organization_id,
                 from_urn=person.urn,
                 to_urn=sso_urn,

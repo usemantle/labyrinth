@@ -6,11 +6,13 @@ import uuid
 
 import pytest
 
-from src.graph.edges.idp_assigned_to_edge import IdpAssignedToEdge
-from src.graph.edges.idp_maps_to_edge import IdpMapsToEdge
-from src.graph.edges.idp_part_of_edge import IdpPartOfEdge
-from src.graph.edges.idp_pushes_to_edge import IdpPushesToEdge
 from src.graph.edges.member_of_edge import MemberOfEdge
+from src.graph.edges.okta_edges import (
+    OktaAssignedToEdge,
+    OktaMapsToEdge,
+    OktaPartOfEdge,
+    OktaPushesToEdge,
+)
 from src.graph.graph_models import URN, Node, NodeMetadataKey
 from src.graph.nodes.application_node import ApplicationNode
 from src.graph.nodes.group_node import GroupNode
@@ -54,7 +56,7 @@ class TestPersonNode:
         assert NK.PERSON_LOGIN not in node.metadata
 
     @pytest.mark.parametrize("edge_cls", [
-        IdpPartOfEdge, IdpAssignedToEdge, IdpMapsToEdge,
+        OktaPartOfEdge, OktaAssignedToEdge, OktaMapsToEdge,
     ])
     def test_allowed_outgoing_edges(self, edge_cls):
         assert edge_cls in PersonNode._allowed_outgoing_edges
@@ -80,9 +82,9 @@ class TestGroupNode:
         assert node.metadata[NK.GROUP_DESCRIPTION] == "All engineering staff"
 
     def test_allowed_edges(self):
-        assert IdpAssignedToEdge in GroupNode._allowed_outgoing_edges
-        assert IdpPushesToEdge in GroupNode._allowed_outgoing_edges
-        assert IdpPartOfEdge in GroupNode._allowed_incoming_edges
+        assert OktaAssignedToEdge in GroupNode._allowed_outgoing_edges
+        assert OktaPushesToEdge in GroupNode._allowed_outgoing_edges
+        assert OktaPartOfEdge in GroupNode._allowed_incoming_edges
 
 
 class TestApplicationNode:
@@ -109,8 +111,8 @@ class TestApplicationNode:
         assert node.metadata[NK.APP_STATUS] == "ACTIVE"
 
     def test_allowed_incoming_edges(self):
-        assert IdpAssignedToEdge in ApplicationNode._allowed_incoming_edges
-        assert IdpPushesToEdge in ApplicationNode._allowed_incoming_edges
+        assert OktaAssignedToEdge in ApplicationNode._allowed_incoming_edges
+        assert OktaPushesToEdge in ApplicationNode._allowed_incoming_edges
 
 
 class TestSsoUserNode:
@@ -136,4 +138,4 @@ class TestSsoUserNode:
 
     def test_allowed_edges(self):
         assert MemberOfEdge in SsoUserNode._allowed_outgoing_edges
-        assert IdpMapsToEdge in SsoUserNode._allowed_incoming_edges
+        assert OktaMapsToEdge in SsoUserNode._allowed_incoming_edges

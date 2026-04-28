@@ -11,10 +11,10 @@ class TestEdgeNamespace:
     """edge_namespace() extracts the namespace prefix from an edge type string."""
 
     @pytest.mark.parametrize("edge_type,expected", [
-        ("idp:assigned_to", "idp"),
-        ("idp:maps_to", "idp"),
-        ("idp:part_of", "idp"),
-        ("idp:pushes_to", "idp"),
+        ("okta:assigned_to", "okta"),
+        ("okta:maps_to", "okta"),
+        ("okta:part_of", "okta"),
+        ("okta:pushes_to", "okta"),
         ("foo:bar:baz", "foo"),  # only the first colon is the separator
     ])
     def test_prefixed(self, edge_type, expected):

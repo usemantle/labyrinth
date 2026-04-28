@@ -161,9 +161,9 @@ class TestOktaLoaderLoad:
         app = apps[0]
         assert app.metadata[NK.APP_SIGN_ON_MODE] == "SAML_2_0"
 
-        part_of = [e for e in edges if e.edge_type == EdgeType.IDP_PART_OF]
-        assigned_to = [e for e in edges if e.edge_type == EdgeType.IDP_ASSIGNED_TO]
-        pushes_to = [e for e in edges if e.edge_type == EdgeType.IDP_PUSHES_TO]
+        part_of = [e for e in edges if e.edge_type == EdgeType.OKTA_PART_OF]
+        assigned_to = [e for e in edges if e.edge_type == EdgeType.OKTA_ASSIGNED_TO]
+        pushes_to = [e for e in edges if e.edge_type == EdgeType.OKTA_PUSHES_TO]
         assert len(part_of) == 2
         assert len(assigned_to) == 2  # one user, one group
         assert len(pushes_to) == 1
@@ -204,7 +204,7 @@ class TestOktaLoaderLoad:
         # group-push/mappings has no fixture -> 404, must NOT raise
         nodes, edges = loader.load(f"urn:okta:idp:{DOMAIN}::root")
         # No push edges, but loader still returns successfully
-        assert all(e.edge_type != EdgeType.IDP_PUSHES_TO for e in edges)
+        assert all(e.edge_type != EdgeType.OKTA_PUSHES_TO for e in edges)
         apps = [n for n in nodes if n.node_type == NodeType.APPLICATION]
         assert len(apps) == 1
 
@@ -223,7 +223,7 @@ class TestOktaLoaderLoad:
             {"id": "00u-orphan"},
         ]])
         _, edges = loader.load(f"urn:okta:idp:{DOMAIN}::root")
-        part_of = [e for e in edges if e.edge_type == EdgeType.IDP_PART_OF]
+        part_of = [e for e in edges if e.edge_type == EdgeType.OKTA_PART_OF]
         # Only the known user produces an edge
         assert len(part_of) == 1
         assert str(part_of[0].from_urn) == f"urn:okta:idp:{DOMAIN}::user/00u1"

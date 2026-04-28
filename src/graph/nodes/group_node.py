@@ -7,9 +7,11 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from src.graph.edges.contains_edge import ContainsEdge
-from src.graph.edges.idp_assigned_to_edge import IdpAssignedToEdge
-from src.graph.edges.idp_part_of_edge import IdpPartOfEdge
-from src.graph.edges.idp_pushes_to_edge import IdpPushesToEdge
+from src.graph.edges.okta_edges import (
+    OktaAssignedToEdge,
+    OktaPartOfEdge,
+    OktaPushesToEdge,
+)
 from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
@@ -22,12 +24,12 @@ class GroupNode(Node):
     node_type: str = NodeType.GROUP
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
-        IdpAssignedToEdge,
-        IdpPushesToEdge,
+        OktaAssignedToEdge,
+        OktaPushesToEdge,
     })
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,
-        IdpPartOfEdge,
+        OktaPartOfEdge,
     })
 
     @classmethod

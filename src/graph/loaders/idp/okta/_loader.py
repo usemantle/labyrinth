@@ -10,9 +10,11 @@ from typing import Any
 import httpx
 
 from src.graph.credentials import CredentialBase, OktaTokenCredential
-from src.graph.edges.idp_assigned_to_edge import IdpAssignedToEdge
-from src.graph.edges.idp_part_of_edge import IdpPartOfEdge
-from src.graph.edges.idp_pushes_to_edge import IdpPushesToEdge
+from src.graph.edges.okta_edges import (
+    OktaAssignedToEdge,
+    OktaPartOfEdge,
+    OktaPushesToEdge,
+)
 from src.graph.graph_models import URN, Edge, Node
 from src.graph.loaders.loader import ConceptLoader, URNComponent
 from src.graph.nodes.application_node import ApplicationNode
@@ -194,7 +196,7 @@ class OktaLoader(ConceptLoader):
             user_urn = user_urn_by_id.get(user["id"])
             if user_urn is None:
                 continue
-            edges.append(IdpPartOfEdge.create(
+            edges.append(OktaPartOfEdge.create(
                 organization_id=self.organization_id,
                 from_urn=user_urn,
                 to_urn=group_urn,
@@ -214,7 +216,7 @@ class OktaLoader(ConceptLoader):
             user_urn = user_urn_by_id.get(app_user.get("id", ""))
             if user_urn is None:
                 continue
-            edges.append(IdpAssignedToEdge.create(
+            edges.append(OktaAssignedToEdge.create(
                 organization_id=self.organization_id,
                 from_urn=user_urn,
                 to_urn=app_urn,
@@ -234,7 +236,7 @@ class OktaLoader(ConceptLoader):
             group_urn = group_urn_by_id.get(assignment.get("id", ""))
             if group_urn is None:
                 continue
-            edges.append(IdpAssignedToEdge.create(
+            edges.append(OktaAssignedToEdge.create(
                 organization_id=self.organization_id,
                 from_urn=group_urn,
                 to_urn=app_urn,
@@ -266,7 +268,7 @@ class OktaLoader(ConceptLoader):
             source_urn = group_urn_by_id.get(source_group_id)
             if source_urn is None:
                 continue
-            edges.append(IdpPushesToEdge.create(
+            edges.append(OktaPushesToEdge.create(
                 organization_id=self.organization_id,
                 from_urn=source_urn,
                 to_urn=app_urn,

@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from src.graph.edges.contains_edge import ContainsEdge
-from src.graph.edges.idp_maps_to_edge import IdpMapsToEdge
 from src.graph.edges.member_of_edge import MemberOfEdge
+from src.graph.edges.okta_edges import OktaMapsToEdge
 from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
@@ -25,7 +25,7 @@ class SsoUserNode(Node):
     })
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,
-        IdpMapsToEdge,
+        OktaMapsToEdge,
     })
 
     @classmethod

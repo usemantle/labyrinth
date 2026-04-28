@@ -7,9 +7,11 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from src.graph.edges.contains_edge import ContainsEdge
-from src.graph.edges.idp_assigned_to_edge import IdpAssignedToEdge
-from src.graph.edges.idp_maps_to_edge import IdpMapsToEdge
-from src.graph.edges.idp_part_of_edge import IdpPartOfEdge
+from src.graph.edges.okta_edges import (
+    OktaAssignedToEdge,
+    OktaMapsToEdge,
+    OktaPartOfEdge,
+)
 from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
@@ -22,9 +24,9 @@ class PersonNode(Node):
     node_type: str = NodeType.PERSON
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
-        IdpPartOfEdge,
-        IdpAssignedToEdge,
-        IdpMapsToEdge,
+        OktaPartOfEdge,
+        OktaAssignedToEdge,
+        OktaMapsToEdge,
     })
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,

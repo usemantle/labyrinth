@@ -87,11 +87,11 @@ class EdgeType(enum.StrEnum):
     RESOLVES_TO = "resolves_to"
     ROUTES_TO = "routes_to"
 
-    # IdP namespace
-    IDP_ASSIGNED_TO = "idp:assigned_to"
-    IDP_MAPS_TO = "idp:maps_to"
-    IDP_PART_OF = "idp:part_of"
-    IDP_PUSHES_TO = "idp:pushes_to"
+    # Okta-sourced edges
+    OKTA_ASSIGNED_TO = "okta:assigned_to"
+    OKTA_MAPS_TO = "okta:maps_to"
+    OKTA_PART_OF = "okta:part_of"
+    OKTA_PUSHES_TO = "okta:pushes_to"
 
     UNKNOWN = "unknown"
 
@@ -99,7 +99,7 @@ class EdgeType(enum.StrEnum):
 def edge_namespace(edge_type: str) -> str | None:
     """Return the namespace prefix of an edge type (e.g. ``"idp"``), or ``None`` if unprefixed.
 
-    Edge type strings may be namespaced as ``"<namespace>:<name>"`` (e.g. ``"idp:assigned_to"``).
+    Edge type strings may be namespaced as ``"<namespace>:<name>"`` (e.g. ``"okta:assigned_to"``).
     Unprefixed types (``"contains"``, ``"reads"``) belong to the default core namespace and
     return ``None``.
     """

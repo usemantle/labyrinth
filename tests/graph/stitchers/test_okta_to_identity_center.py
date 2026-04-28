@@ -36,7 +36,7 @@ class TestOktaToIdentityCenter:
 
         result = OktaToIdentityCenterStitcher().stitch(ORG_ID, graph, {})
 
-        edges = [e for e in result.edges if e.edge_type == EdgeType.IDP_MAPS_TO]
+        edges = [e for e in result.edges if e.edge_type == EdgeType.OKTA_MAPS_TO]
         assert len(edges) == 1
         edge = edges[0]
         assert str(edge.from_urn) == str(person.urn)
@@ -52,7 +52,7 @@ class TestOktaToIdentityCenter:
 
         result = OktaToIdentityCenterStitcher().stitch(ORG_ID, graph, {})
 
-        edges = [e for e in result.edges if e.edge_type == EdgeType.IDP_MAPS_TO]
+        edges = [e for e in result.edges if e.edge_type == EdgeType.OKTA_MAPS_TO]
         assert len(edges) == 1
         edge = edges[0]
         assert edge.metadata[EK.MATCH_KEY] == "email"
@@ -68,7 +68,7 @@ class TestOktaToIdentityCenter:
 
         result = OktaToIdentityCenterStitcher().stitch(ORG_ID, graph, {})
 
-        edges = [e for e in result.edges if e.edge_type == EdgeType.IDP_MAPS_TO]
+        edges = [e for e in result.edges if e.edge_type == EdgeType.OKTA_MAPS_TO]
         assert len(edges) == 1
         assert str(edges[0].to_urn) == str(sso_by_eid.urn)
         assert edges[0].metadata[EK.MATCH_KEY] == "externalId"
