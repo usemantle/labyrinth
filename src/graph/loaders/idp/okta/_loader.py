@@ -94,38 +94,41 @@ class OktaLoader(ConceptLoader):
             "token": self._api_token,
             "authorizationMode": "SSWS",
         })
-        nodes: list[Node] = []
-        edges: list[Edge] = []
 
-        user_urn_by_id = await self._load_users(client, nodes)
-        group_urn_by_id = await self._load_groups(client, nodes)
-        app_urn_by_id = await self._load_applications(client, nodes)
+        # Phase 1: top-level entity discovery (users, groups, apps) — independent, run in parallel.
+        (user_nodes, user_urns), (group_nodes, group_urns), (app_nodes, app_urns) = await asyncio.gather(
+            self._load_users(client),
+            self._load_groups(client),
+            self._load_applications(client),
+        )
 
-        for group_id, group_urn in group_urn_by_id.items():
-            await self._load_group_memberships(
-                client, group_id, group_urn, user_urn_by_id, edges,
-            )
+        # Phase 2: per-group memberships and per-app assignments / pushes — fan out, all parallel.
+        edge_tasks: list = [
+            self._load_group_memberships(client, gid, gurn, user_urns)
+            for gid, gurn in group_urns.items()
+        ]
+        for app_id, app_urn in app_urns.items():
+            edge_tasks.extend([
+                self._load_app_user_assignments(client, app_id, app_urn, user_urns),
+                self._load_app_group_assignments(client, app_id, app_urn, group_urns),
+                self._load_app_group_push(client, app_id, app_urn, group_urns),
+            ])
+        edge_lists = await asyncio.gather(*edge_tasks) if edge_tasks else []
 
-        for app_id, app_urn in app_urn_by_id.items():
-            await self._load_app_user_assignments(
-                client, app_id, app_urn, user_urn_by_id, edges,
-            )
-            await self._load_app_group_assignments(
-                client, app_id, app_urn, group_urn_by_id, edges,
-            )
-            await self._load_app_group_push(
-                client, app_id, app_urn, group_urn_by_id, edges,
-            )
-
+        nodes: list[Node] = [*user_nodes, *group_nodes, *app_nodes]
+        edges: list[Edge] = [edge for sublist in edge_lists for edge in sublist]
         return nodes, edges
 
     # ── User / Group / Application discovery ──────────────────────────────
+    # Each helper returns its own (nodes, urns) — no shared mutable state, so safe under
+    # asyncio.gather() (or threads, if the SDK ever moves to a threaded executor).
 
-    async def _load_users(self, client: OktaClient, nodes: list[Node]) -> dict[str, URN]:
-        result: dict[str, URN] = {}
+    async def _load_users(self, client: OktaClient) -> tuple[list[Node], dict[str, URN]]:
+        nodes: list[Node] = []
+        urns: dict[str, URN] = {}
         async for user in self._paginate(client.list_users):
             urn = self.build_urn("user", user.id)
-            result[user.id] = urn
+            urns[user.id] = urn
             profile = getattr(user, "profile", None)
             nodes.append(PersonNode.create(
                 organization_id=self.organization_id,
@@ -136,14 +139,15 @@ class OktaLoader(ConceptLoader):
                 status=getattr(user, "status", None),
                 display_name=_full_name(profile),
             ))
-        logger.info("Discovered %d Okta users", len(result))
-        return result
+        logger.info("Discovered %d Okta users", len(urns))
+        return nodes, urns
 
-    async def _load_groups(self, client: OktaClient, nodes: list[Node]) -> dict[str, URN]:
-        result: dict[str, URN] = {}
+    async def _load_groups(self, client: OktaClient) -> tuple[list[Node], dict[str, URN]]:
+        nodes: list[Node] = []
+        urns: dict[str, URN] = {}
         async for group in self._paginate(client.list_groups):
             urn = self.build_urn("group", group.id)
-            result[group.id] = urn
+            urns[group.id] = urn
             inner = _group_profile_inner(group)
             nodes.append(GroupNode.create(
                 organization_id=self.organization_id,
@@ -152,14 +156,15 @@ class OktaLoader(ConceptLoader):
                 name=getattr(inner, "name", None),
                 description=getattr(inner, "description", None),
             ))
-        logger.info("Discovered %d Okta groups", len(result))
-        return result
+        logger.info("Discovered %d Okta groups", len(urns))
+        return nodes, urns
 
-    async def _load_applications(self, client: OktaClient, nodes: list[Node]) -> dict[str, URN]:
-        result: dict[str, URN] = {}
+    async def _load_applications(self, client: OktaClient) -> tuple[list[Node], dict[str, URN]]:
+        nodes: list[Node] = []
+        urns: dict[str, URN] = {}
         async for app in self._paginate(client.list_applications):
             urn = self.build_urn("app", app.id)
-            result[app.id] = urn
+            urns[app.id] = urn
             nodes.append(ApplicationNode.create(
                 organization_id=self.organization_id,
                 urn=urn,
@@ -169,8 +174,8 @@ class OktaLoader(ConceptLoader):
                 sign_on_mode=getattr(app, "sign_on_mode", None),
                 status=getattr(app, "status", None),
             ))
-        logger.info("Discovered %d Okta applications", len(result))
-        return result
+        logger.info("Discovered %d Okta applications", len(urns))
+        return nodes, urns
 
     # ── Edge discovery ────────────────────────────────────────────────────
 
@@ -180,8 +185,8 @@ class OktaLoader(ConceptLoader):
         group_id: str,
         group_urn: URN,
         user_urn_by_id: dict[str, URN],
-        edges: list[Edge],
-    ) -> None:
+    ) -> list[Edge]:
+        edges: list[Edge] = []
         async for user in self._paginate(client.list_group_users, group_id):
             user_urn = user_urn_by_id.get(user.id)
             if user_urn is None:
@@ -191,6 +196,7 @@ class OktaLoader(ConceptLoader):
                 from_urn=user_urn,
                 to_urn=group_urn,
             ))
+        return edges
 
     async def _load_app_user_assignments(
         self,
@@ -198,8 +204,8 @@ class OktaLoader(ConceptLoader):
         app_id: str,
         app_urn: URN,
         user_urn_by_id: dict[str, URN],
-        edges: list[Edge],
-    ) -> None:
+    ) -> list[Edge]:
+        edges: list[Edge] = []
         async for app_user in self._paginate(client.list_application_users, app_id):
             user_urn = user_urn_by_id.get(getattr(app_user, "id", ""))
             if user_urn is None:
@@ -209,6 +215,7 @@ class OktaLoader(ConceptLoader):
                 from_urn=user_urn,
                 to_urn=app_urn,
             ))
+        return edges
 
     async def _load_app_group_assignments(
         self,
@@ -216,8 +223,8 @@ class OktaLoader(ConceptLoader):
         app_id: str,
         app_urn: URN,
         group_urn_by_id: dict[str, URN],
-        edges: list[Edge],
-    ) -> None:
+    ) -> list[Edge]:
+        edges: list[Edge] = []
         async for assignment in self._paginate(
             client.list_application_group_assignments, app_id,
         ):
@@ -229,6 +236,7 @@ class OktaLoader(ConceptLoader):
                 from_urn=group_urn,
                 to_urn=app_urn,
             ))
+        return edges
 
     async def _load_app_group_push(
         self,
@@ -236,8 +244,8 @@ class OktaLoader(ConceptLoader):
         app_id: str,
         app_urn: URN,
         group_urn_by_id: dict[str, URN],
-        edges: list[Edge],
-    ) -> None:
+    ) -> list[Edge]:
+        edges: list[Edge] = []
         try:
             async for mapping in self._paginate(client.list_group_push_mappings, app_id):
                 source_id = getattr(mapping, "source_group_id", None)
@@ -254,6 +262,7 @@ class OktaLoader(ConceptLoader):
         except _OktaPaginationError as exc:
             # Group Push isn't enabled for every app type; non-success here is expected.
             logger.debug("Group Push not available for app %s: %s", app_id, exc)
+        return edges
 
     # ── Pagination ────────────────────────────────────────────────────────
 
