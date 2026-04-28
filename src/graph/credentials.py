@@ -37,3 +37,11 @@ class GithubTokenCredential(CredentialBase):
 
     type: Literal["github_token"] = "github_token"
     token: str
+
+
+class OktaTokenCredential(CredentialBase):
+    """Okta SSWS API token."""
+
+    type: Literal["okta_token"] = "okta_token"
+    domain: str  # e.g. "yourorg.okta.com"
+    api_token: str
