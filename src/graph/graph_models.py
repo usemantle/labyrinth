@@ -52,6 +52,12 @@ class NodeType(enum.StrEnum):
     IAM_POLICY = "iam_policy"
     IDENTITY = "identity"
     SSO_GROUP = "sso_group"
+    SSO_USER = "sso_user"
+
+    # IdP (Okta, etc.)
+    PERSON = "person"
+    GROUP = "group"
+    APPLICATION = "application"
 
     # Legacy / classifier-only
     DB_ROLE = "db_role"
@@ -80,7 +86,26 @@ class EdgeType(enum.StrEnum):
     PROTECTED_BY = "protected_by"
     RESOLVES_TO = "resolves_to"
     ROUTES_TO = "routes_to"
+
+    # IdP namespace
+    IDP_ASSIGNED_TO = "idp:assigned_to"
+    IDP_MAPS_TO = "idp:maps_to"
+    IDP_PART_OF = "idp:part_of"
+    IDP_PUSHES_TO = "idp:pushes_to"
+
     UNKNOWN = "unknown"
+
+
+def edge_namespace(edge_type: str) -> str | None:
+    """Return the namespace prefix of an edge type (e.g. ``"idp"``), or ``None`` if unprefixed.
+
+    Edge type strings may be namespaced as ``"<namespace>:<name>"`` (e.g. ``"idp:assigned_to"``).
+    Unprefixed types (``"contains"``, ``"reads"``) belong to the default core namespace and
+    return ``None``.
+    """
+    if not edge_type or ":" not in edge_type:
+        return None
+    return edge_type.split(":", 1)[0]
 
 
 class NodeMetadataKey(enum.StrEnum):
@@ -233,6 +258,25 @@ class NodeMetadataKey(enum.StrEnum):
     # ── SSO ─────────────────────────────────────────────────────────────
     SSO_GROUP_ID = "sso_group_id"
     SSO_GROUP_NAME = "sso_group_name"
+    SSO_USER_ID = "sso_user_id"
+    SSO_USER_NAME = "sso_user_name"
+    SSO_USER_EMAIL = "sso_user_email"
+    SSO_USER_EXTERNAL_ID = "sso_user_external_id"
+
+    # ── IdP (Person / Group / Application) ──────────────────────────────
+    PERSON_OKTA_ID = "person_okta_id"
+    PERSON_EMAIL = "person_email"
+    PERSON_LOGIN = "person_login"
+    PERSON_STATUS = "person_status"
+    PERSON_DISPLAY_NAME = "person_display_name"
+    GROUP_OKTA_ID = "group_okta_id"
+    GROUP_NAME = "group_name"
+    GROUP_DESCRIPTION = "group_description"
+    APP_OKTA_ID = "app_okta_id"
+    APP_NAME = "app_name"
+    APP_LABEL = "app_label"
+    APP_SIGN_ON_MODE = "app_sign_on_mode"
+    APP_STATUS = "app_status"
 
     # ── DNS ──────────────────────────────────────────────────────────────
     DNS_RECORD_NAME = "dns_record_name"
@@ -303,6 +347,10 @@ class EdgeMetadataKey(enum.StrEnum):
     # ── Networking ────────────────────────────────────────────────────
     LISTENER_PORT = "listener_port"
     LISTENER_PROTOCOL = "listener_protocol"
+
+    # ── Stitcher provenance ──────────────────────────────────────────
+    MATCH_KEY = "match_key"
+    MATCH_VALUE = "match_value"
 
 
 class _EnumKeyDict:

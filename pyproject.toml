@@ -16,6 +16,7 @@ dependencies = [
     "iterfzf>=0.8",
     "psycopg2>=2.9.11",
     "claude-agent-sdk>=0.1.0",
+    "okta>=3.4.2",
 ]
 
 [project.scripts]

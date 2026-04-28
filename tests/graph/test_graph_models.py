@@ -2,9 +2,35 @@
 
 import pytest
 
-from src.graph.graph_models import NodeMetadata, NodeMetadataKey
+from src.graph.graph_models import NodeMetadata, NodeMetadataKey, edge_namespace
 
 NK = NodeMetadataKey
+
+
+class TestEdgeNamespace:
+    """edge_namespace() extracts the namespace prefix from an edge type string."""
+
+    @pytest.mark.parametrize("edge_type,expected", [
+        ("idp:assigned_to", "idp"),
+        ("idp:maps_to", "idp"),
+        ("idp:part_of", "idp"),
+        ("idp:pushes_to", "idp"),
+        ("foo:bar:baz", "foo"),  # only the first colon is the separator
+    ])
+    def test_prefixed(self, edge_type, expected):
+        assert edge_namespace(edge_type) == expected
+
+    @pytest.mark.parametrize("edge_type", [
+        "contains",
+        "reads",
+        "writes",
+        "member_of",
+    ])
+    def test_unprefixed_returns_none(self, edge_type):
+        assert edge_namespace(edge_type) is None
+
+    def test_empty_returns_none(self):
+        assert edge_namespace("") is None
 
 
 class TestSecurityMetadataKeys:
