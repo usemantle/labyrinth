@@ -19,9 +19,7 @@ from src.graph.edges.okta_edges import (
 )
 from src.graph.graph_models import URN, Edge, Node
 from src.graph.loaders.loader import ConceptLoader, URNComponent
-from src.graph.nodes.application_node import ApplicationNode
-from src.graph.nodes.group_node import GroupNode
-from src.graph.nodes.person_node import PersonNode
+from src.graph.nodes.okta import ApplicationNode, GroupNode, PersonNode
 
 logger = logging.getLogger(__name__)
 

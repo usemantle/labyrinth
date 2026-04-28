@@ -5,8 +5,8 @@ from __future__ import annotations
 import uuid
 
 from src.graph.graph_models import URN, EdgeMetadataKey, EdgeType, Graph
-from src.graph.nodes.person_node import PersonNode
-from src.graph.nodes.sso_user_node import SsoUserNode
+from src.graph.nodes.aws.sso_user_node import SsoUserNode
+from src.graph.nodes.okta.person_node import PersonNode
 from src.graph.stitchers.okta_to_identity_center import OktaToIdentityCenterStitcher
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")

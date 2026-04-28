@@ -14,10 +14,10 @@ from src.graph.edges.okta_edges import (
     OktaPushesToEdge,
 )
 from src.graph.graph_models import URN, Node, NodeMetadataKey
-from src.graph.nodes.application_node import ApplicationNode
-from src.graph.nodes.group_node import GroupNode
-from src.graph.nodes.person_node import PersonNode
-from src.graph.nodes.sso_user_node import SsoUserNode
+from src.graph.nodes.aws.sso_user_node import SsoUserNode
+from src.graph.nodes.okta.application_node import ApplicationNode
+from src.graph.nodes.okta.group_node import GroupNode
+from src.graph.nodes.okta.person_node import PersonNode
 
 NK = NodeMetadataKey
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")

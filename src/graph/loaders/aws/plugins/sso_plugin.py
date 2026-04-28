@@ -11,8 +11,8 @@ import boto3
 from src.graph.edges.member_of_edge import MemberOfEdge
 from src.graph.graph_models import URN, Edge, Node
 from src.graph.loaders.aws.plugins._base import AwsResourcePlugin
+from src.graph.nodes.aws.sso_user_node import SsoUserNode
 from src.graph.nodes.sso_group_node import SsoGroupNode
-from src.graph.nodes.sso_user_node import SsoUserNode
 
 logger = logging.getLogger(__name__)
 
