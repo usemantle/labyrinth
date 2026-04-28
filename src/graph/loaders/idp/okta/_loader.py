@@ -1,13 +1,15 @@
-"""OktaLoader — discovers Persons, Groups, Applications, and IdP edges from an Okta organization."""
+"""OktaLoader — discovers Persons, Groups, Applications, and Okta-sourced edges."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import uuid
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
-import httpx
+from okta.client import Client as OktaClient
 
 from src.graph.credentials import CredentialBase, OktaTokenCredential
 from src.graph.edges.okta_edges import (
@@ -27,12 +29,16 @@ _PAGE_LIMIT = 200
 _LINK_NEXT_RE = re.compile(r'<([^>]+)>\s*;\s*rel="next"')
 
 
+class _OktaPaginationError(RuntimeError):
+    """Raised when an Okta SDK call returns an error during pagination."""
+
+
 class OktaLoader(ConceptLoader):
-    """Loader for an Okta organization.
+    """Loader for an Okta organization using the official ``okta-sdk-python`` client.
 
     Discovers users (PersonNode), groups (GroupNode), applications (ApplicationNode),
-    and IdP edges (IDP:PART_OF, IDP:ASSIGNED_TO, IDP:PUSHES_TO) by paging through the
-    Okta Core API with an SSWS token.
+    and Okta-sourced edges (okta:part_of, okta:assigned_to, okta:pushes_to) by paging
+    through the Okta Core API with an SSWS token.
     """
 
     def __init__(
@@ -45,7 +51,6 @@ class OktaLoader(ConceptLoader):
         # Strip any protocol prefix and trailing slash the user may have entered.
         self._domain = domain.removeprefix("https://").removeprefix("http://").rstrip("/")
         self._api_token = api_token
-        self._base_url = f"https://{self._domain}/api/v1"
 
     def build_urn(self, *path_segments: str) -> URN:
         path = "/".join(path_segments)
@@ -80,120 +85,107 @@ class OktaLoader(ConceptLoader):
         credentials: dict,
         **kwargs: Any,
     ) -> tuple[OktaLoader, str]:
-        domain = urn.account
-        return cls(project_id, domain, credentials["api_token"]), str(urn)
+        return cls(project_id, urn.account, credentials["api_token"]), str(urn)
 
     def load(self, resource: str) -> tuple[list[Node], list[Edge]]:
+        return asyncio.run(self._load_async())
+
+    async def _load_async(self) -> tuple[list[Node], list[Edge]]:
+        client = OktaClient({
+            "orgUrl": f"https://{self._domain}",
+            "token": self._api_token,
+            "authorizationMode": "SSWS",
+        })
         nodes: list[Node] = []
         edges: list[Edge] = []
 
-        with httpx.Client(
-            base_url=self._base_url,
-            headers={
-                "Authorization": f"SSWS {self._api_token}",
-                "Accept": "application/json",
-                "User-Agent": "labyrinth-okta-loader",
-            },
-            timeout=30.0,
-        ) as client:
-            user_urn_by_id = self._load_users(client, nodes)
-            group_urn_by_id = self._load_groups(client, nodes)
-            app_urn_by_id = self._load_applications(client, nodes)
+        user_urn_by_id = await self._load_users(client, nodes)
+        group_urn_by_id = await self._load_groups(client, nodes)
+        app_urn_by_id = await self._load_applications(client, nodes)
 
-            for group_id, group_urn in group_urn_by_id.items():
-                self._load_group_memberships(
-                    client, group_id, group_urn, user_urn_by_id, edges,
-                )
+        for group_id, group_urn in group_urn_by_id.items():
+            await self._load_group_memberships(
+                client, group_id, group_urn, user_urn_by_id, edges,
+            )
 
-            for app_id, app_urn in app_urn_by_id.items():
-                self._load_app_user_assignments(
-                    client, app_id, app_urn, user_urn_by_id, edges,
-                )
-                self._load_app_group_assignments(
-                    client, app_id, app_urn, group_urn_by_id, edges,
-                )
-                self._load_app_group_push(
-                    client, app_id, app_urn, group_urn_by_id, edges,
-                )
+        for app_id, app_urn in app_urn_by_id.items():
+            await self._load_app_user_assignments(
+                client, app_id, app_urn, user_urn_by_id, edges,
+            )
+            await self._load_app_group_assignments(
+                client, app_id, app_urn, group_urn_by_id, edges,
+            )
+            await self._load_app_group_push(
+                client, app_id, app_urn, group_urn_by_id, edges,
+            )
 
         return nodes, edges
 
     # ── User / Group / Application discovery ──────────────────────────────
 
-    def _load_users(
-        self, client: httpx.Client, nodes: list[Node],
-    ) -> dict[str, URN]:
+    async def _load_users(self, client: OktaClient, nodes: list[Node]) -> dict[str, URN]:
         result: dict[str, URN] = {}
-        for user in self._paginate(client, "/users", {"limit": _PAGE_LIMIT}):
-            user_id = user["id"]
-            profile = user.get("profile") or {}
-            urn = self.build_urn("user", user_id)
-            result[user_id] = urn
+        async for user in self._paginate(client.list_users):
+            urn = self.build_urn("user", user.id)
+            result[user.id] = urn
+            profile = getattr(user, "profile", None)
             nodes.append(PersonNode.create(
                 organization_id=self.organization_id,
                 urn=urn,
-                okta_id=user_id,
-                email=profile.get("email"),
-                login=profile.get("login"),
-                status=user.get("status"),
+                okta_id=user.id,
+                email=getattr(profile, "email", None) if profile else None,
+                login=getattr(profile, "login", None) if profile else None,
+                status=getattr(user, "status", None),
                 display_name=_full_name(profile),
             ))
         logger.info("Discovered %d Okta users", len(result))
         return result
 
-    def _load_groups(
-        self, client: httpx.Client, nodes: list[Node],
-    ) -> dict[str, URN]:
+    async def _load_groups(self, client: OktaClient, nodes: list[Node]) -> dict[str, URN]:
         result: dict[str, URN] = {}
-        for group in self._paginate(client, "/groups", {"limit": _PAGE_LIMIT}):
-            group_id = group["id"]
-            profile = group.get("profile") or {}
-            urn = self.build_urn("group", group_id)
-            result[group_id] = urn
+        async for group in self._paginate(client.list_groups):
+            urn = self.build_urn("group", group.id)
+            result[group.id] = urn
+            inner = _group_profile_inner(group)
             nodes.append(GroupNode.create(
                 organization_id=self.organization_id,
                 urn=urn,
-                okta_id=group_id,
-                name=profile.get("name"),
-                description=profile.get("description"),
+                okta_id=group.id,
+                name=getattr(inner, "name", None),
+                description=getattr(inner, "description", None),
             ))
         logger.info("Discovered %d Okta groups", len(result))
         return result
 
-    def _load_applications(
-        self, client: httpx.Client, nodes: list[Node],
-    ) -> dict[str, URN]:
+    async def _load_applications(self, client: OktaClient, nodes: list[Node]) -> dict[str, URN]:
         result: dict[str, URN] = {}
-        for app in self._paginate(client, "/apps", {"limit": _PAGE_LIMIT}):
-            app_id = app["id"]
-            urn = self.build_urn("app", app_id)
-            result[app_id] = urn
+        async for app in self._paginate(client.list_applications):
+            urn = self.build_urn("app", app.id)
+            result[app.id] = urn
             nodes.append(ApplicationNode.create(
                 organization_id=self.organization_id,
                 urn=urn,
-                okta_id=app_id,
-                name=app.get("name"),
-                label=app.get("label"),
-                sign_on_mode=app.get("signOnMode"),
-                status=app.get("status"),
+                okta_id=app.id,
+                name=getattr(app, "name", None),
+                label=getattr(app, "label", None),
+                sign_on_mode=getattr(app, "sign_on_mode", None),
+                status=getattr(app, "status", None),
             ))
         logger.info("Discovered %d Okta applications", len(result))
         return result
 
     # ── Edge discovery ────────────────────────────────────────────────────
 
-    def _load_group_memberships(
+    async def _load_group_memberships(
         self,
-        client: httpx.Client,
+        client: OktaClient,
         group_id: str,
         group_urn: URN,
         user_urn_by_id: dict[str, URN],
         edges: list[Edge],
     ) -> None:
-        for user in self._paginate(
-            client, f"/groups/{group_id}/users", {"limit": _PAGE_LIMIT},
-        ):
-            user_urn = user_urn_by_id.get(user["id"])
+        async for user in self._paginate(client.list_group_users, group_id):
+            user_urn = user_urn_by_id.get(user.id)
             if user_urn is None:
                 continue
             edges.append(OktaPartOfEdge.create(
@@ -202,18 +194,16 @@ class OktaLoader(ConceptLoader):
                 to_urn=group_urn,
             ))
 
-    def _load_app_user_assignments(
+    async def _load_app_user_assignments(
         self,
-        client: httpx.Client,
+        client: OktaClient,
         app_id: str,
         app_urn: URN,
         user_urn_by_id: dict[str, URN],
         edges: list[Edge],
     ) -> None:
-        for app_user in self._paginate(
-            client, f"/apps/{app_id}/users", {"limit": _PAGE_LIMIT},
-        ):
-            user_urn = user_urn_by_id.get(app_user.get("id", ""))
+        async for app_user in self._paginate(client.list_application_users, app_id):
+            user_urn = user_urn_by_id.get(getattr(app_user, "id", ""))
             if user_urn is None:
                 continue
             edges.append(OktaAssignedToEdge.create(
@@ -222,18 +212,18 @@ class OktaLoader(ConceptLoader):
                 to_urn=app_urn,
             ))
 
-    def _load_app_group_assignments(
+    async def _load_app_group_assignments(
         self,
-        client: httpx.Client,
+        client: OktaClient,
         app_id: str,
         app_urn: URN,
         group_urn_by_id: dict[str, URN],
         edges: list[Edge],
     ) -> None:
-        for assignment in self._paginate(
-            client, f"/apps/{app_id}/groups", {"limit": _PAGE_LIMIT},
+        async for assignment in self._paginate(
+            client.list_application_group_assignments, app_id,
         ):
-            group_urn = group_urn_by_id.get(assignment.get("id", ""))
+            group_urn = group_urn_by_id.get(getattr(assignment, "id", ""))
             if group_urn is None:
                 continue
             edges.append(OktaAssignedToEdge.create(
@@ -242,71 +232,77 @@ class OktaLoader(ConceptLoader):
                 to_urn=app_urn,
             ))
 
-    def _load_app_group_push(
+    async def _load_app_group_push(
         self,
-        client: httpx.Client,
+        client: OktaClient,
         app_id: str,
         app_urn: URN,
         group_urn_by_id: dict[str, URN],
         edges: list[Edge],
     ) -> None:
         try:
-            mappings = list(self._paginate(
-                client,
-                f"/apps/{app_id}/group-push/mappings",
-                {"limit": _PAGE_LIMIT},
-            ))
-        except httpx.HTTPStatusError as exc:
-            # Group Push isn't enabled for every app type; non-200 here is expected.
-            if exc.response.status_code in (400, 403, 404):
+            async for mapping in self._paginate(client.list_group_push_mappings, app_id):
+                source_id = getattr(mapping, "source_group_id", None)
+                if not source_id:
+                    continue
+                source_urn = group_urn_by_id.get(source_id)
+                if source_urn is None:
+                    continue
+                edges.append(OktaPushesToEdge.create(
+                    organization_id=self.organization_id,
+                    from_urn=source_urn,
+                    to_urn=app_urn,
+                ))
+        except _OktaPaginationError as exc:
+            # Group Push isn't enabled for every app type; non-success here is expected.
+            logger.debug("Group Push not available for app %s: %s", app_id, exc)
+
+    # ── Pagination ────────────────────────────────────────────────────────
+
+    async def _paginate(self, method, *args):
+        """Yield items from an Okta SDK list_* method, following Link rel=\"next\" cursors."""
+        after: str | None = None
+        while True:
+            kwargs: dict[str, Any] = {"limit": _PAGE_LIMIT}
+            if after:
+                kwargs["after"] = after
+            items, resp, err = await method(*args, **kwargs)
+            if err is not None:
+                raise _OktaPaginationError(str(err))
+            for item in items or []:
+                yield item
+            after = _next_cursor(getattr(resp, "headers", None))
+            if after is None:
                 return
-            raise
-        for mapping in mappings:
-            source_group_id = mapping.get("sourceGroupId")
-            if not source_group_id:
-                continue
-            source_urn = group_urn_by_id.get(source_group_id)
-            if source_urn is None:
-                continue
-            edges.append(OktaPushesToEdge.create(
-                organization_id=self.organization_id,
-                from_urn=source_urn,
-                to_urn=app_urn,
-            ))
-
-    # ── HTTP helpers ──────────────────────────────────────────────────────
-
-    def _paginate(
-        self,
-        client: httpx.Client,
-        path: str,
-        params: dict[str, Any],
-    ):
-        """Yield items from a paginated Okta endpoint, following Link: rel="next" headers."""
-        url: str | None = path
-        next_params: dict[str, Any] | None = params
-        while url is not None:
-            response = client.get(url, params=next_params)
-            response.raise_for_status()
-            payload = response.json()
-            if not isinstance(payload, list):
-                return
-            yield from payload
-            url = _next_link(response.headers.get("link", ""))
-            # The 'next' URL is absolute and already carries query params; pass None.
-            next_params = None
 
 
-def _full_name(profile: dict) -> str | None:
-    first = profile.get("firstName") or ""
-    last = profile.get("lastName") or ""
+def _full_name(profile) -> str | None:
+    if profile is None:
+        return None
+    first = getattr(profile, "first_name", None) or ""
+    last = getattr(profile, "last_name", None) or ""
     full = f"{first} {last}".strip()
     return full or None
 
 
-def _next_link(link_header: str) -> str | None:
-    """Extract the rel=\"next\" URL from an Okta Link header, if any."""
-    if not link_header:
+def _group_profile_inner(group):
+    """Return the concrete inner object from a Group's polymorphic profile field."""
+    profile = getattr(group, "profile", None)
+    if profile is None:
         return None
-    match = _LINK_NEXT_RE.search(link_header)
-    return match.group(1) if match else None
+    return getattr(profile, "actual_instance", profile)
+
+
+def _next_cursor(headers) -> str | None:
+    """Extract the 'after' cursor from an Okta Link rel=\"next\" header."""
+    if not headers:
+        return None
+    link = headers.get("link") or headers.get("Link")
+    if not link:
+        return None
+    match = _LINK_NEXT_RE.search(link)
+    if not match:
+        return None
+    parsed = urlparse(match.group(1))
+    values = parse_qs(parsed.query).get("after")
+    return values[0] if values else None
