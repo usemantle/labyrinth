@@ -86,9 +86,12 @@ class OktaLoader(ConceptLoader):
         return cls(project_id, urn.account, credentials["api_token"]), str(urn)
 
     def load(self, resource: str) -> tuple[list[Node], list[Edge]]:
-        return asyncio.run(self._load_async())
+        return asyncio.run(self.load_async(resource))
 
-    async def _load_async(self) -> tuple[list[Node], list[Edge]]:
+    async def load_async(self, resource: str) -> tuple[list[Node], list[Edge]]:
+        # `resource` is part of the ConceptLoader.load() contract; this loader derives
+        # its scope from self._domain set in __init__, so the argument is unused here.
+        del resource
         client = OktaClient({
             "orgUrl": f"https://{self._domain}",
             "token": self._api_token,
