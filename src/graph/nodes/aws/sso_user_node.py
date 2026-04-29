@@ -6,9 +6,11 @@ import uuid
 from dataclasses import dataclass
 from typing import ClassVar
 
+from src.graph.edges.assumes_edge import AssumesEdge
 from src.graph.edges.contains_edge import ContainsEdge
 from src.graph.edges.member_of_edge import MemberOfEdge
 from src.graph.edges.okta_edges import OktaMapsToEdge
+from src.graph.edges.sso_assigned_to_edge import SsoAssignedToEdge
 from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
 
 NK = NodeMetadataKey
@@ -21,7 +23,9 @@ class SsoUserNode(Node):
     node_type: str = NodeType.SSO_USER
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
+        AssumesEdge,
         MemberOfEdge,
+        SsoAssignedToEdge,
     })
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,

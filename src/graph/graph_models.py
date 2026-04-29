@@ -53,6 +53,7 @@ class NodeType(enum.StrEnum):
     IDENTITY = "identity"
     SSO_GROUP = "sso_group"
     SSO_USER = "sso_user"
+    PERMISSION_SET = "aws:permission_set"
 
     # IdP (Okta, etc.)
     PERSON = "person"
@@ -92,6 +93,9 @@ class EdgeType(enum.StrEnum):
     OKTA_MAPS_TO = "okta:maps_to"
     OKTA_PART_OF = "okta:part_of"
     OKTA_PUSHES_TO = "okta:pushes_to"
+
+    # AWS Identity Center / SSO
+    SSO_ASSIGNED_TO = "sso:assigned_to"
 
     UNKNOWN = "unknown"
 
@@ -262,6 +266,11 @@ class NodeMetadataKey(enum.StrEnum):
     SSO_USER_NAME = "sso_user_name"
     SSO_USER_EMAIL = "sso_user_email"
     SSO_USER_EXTERNAL_ID = "sso_user_external_id"
+    PERMISSION_SET_NAME = "permission_set_name"
+    PERMISSION_SET_ARN = "permission_set_arn"
+    PERMISSION_SET_INSTANCE_ARN = "permission_set_instance_arn"
+    PERMISSION_SET_DESCRIPTION = "permission_set_description"
+    PERMISSION_SET_SESSION_DURATION = "permission_set_session_duration"
 
     # ── IdP (Person / Group / Application) ──────────────────────────────
     PERSON_OKTA_ID = "person_okta_id"
@@ -351,6 +360,12 @@ class EdgeMetadataKey(enum.StrEnum):
     # ── Stitcher provenance ──────────────────────────────────────────
     MATCH_KEY = "match_key"
     MATCH_VALUE = "match_value"
+
+    # ── AWS Identity Center / SSO assignment ─────────────────────────
+    ACCOUNT_ID = "account_id"
+    PERMISSION_SET_ARN = "permission_set_arn"
+    VIA_GROUP = "via_group"
+    TRUST_POLICY_CONDITION = "trust_policy_condition"
 
 
 class _EnumKeyDict:

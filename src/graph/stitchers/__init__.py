@@ -8,10 +8,12 @@ from src.graph.stitchers.dockerfile_to_entrypoint import DockerfileToEntrypointS
 from src.graph.stitchers.dockerfile_to_image_repo import DockerfileToImageRepoStitcher
 from src.graph.stitchers.ecs_task_to_ecr import EcsTaskToEcrStitcher
 from src.graph.stitchers.function_to_table import FunctionToTableStitcher
+from src.graph.stitchers.identity_center_to_iam import IdentityCenterToIamStitcher
 from src.graph.stitchers.okta_to_identity_center import OktaToIdentityCenterStitcher
 from src.graph.stitchers.orm_class_to_table import OrmClassToTableStitcher
 from src.graph.stitchers.rds_to_database import RdsToDatabaseStitcher
 from src.graph.stitchers.sg_resolver import SecurityGroupResolver
+from src.graph.stitchers.sts_assume_role_relations import StsAssumeRoleRelationsStitcher
 
 STITCHER_REGISTRY: list[type[Stitcher]] = [
     OrmClassToTableStitcher,
@@ -24,6 +26,8 @@ STITCHER_REGISTRY: list[type[Stitcher]] = [
     ApiGwToAlbStitcher,
     BackendGroupToEcsStitcher,
     OktaToIdentityCenterStitcher,
+    IdentityCenterToIamStitcher,
+    StsAssumeRoleRelationsStitcher,
 ]
 
 RESOLVER_REGISTRY: list[type[Resolver]] = [

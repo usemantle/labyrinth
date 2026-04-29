@@ -9,8 +9,10 @@ from collections.abc import Callable
 import boto3
 
 from src.graph.edges.member_of_edge import MemberOfEdge
+from src.graph.edges.sso_assigned_to_edge import SsoAssignedToEdge
 from src.graph.graph_models import URN, Edge, Node
 from src.graph.loaders.aws.plugins._base import AwsResourcePlugin
+from src.graph.nodes.aws.permission_set_node import PermissionSetNode
 from src.graph.nodes.aws.sso_user_node import SsoUserNode
 from src.graph.nodes.sso_group_node import SsoGroupNode
 
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class SsoResourcePlugin(AwsResourcePlugin):
-    """Discover AWS IAM Identity Center groups, users, and group memberships."""
+    """Discover AWS IAM Identity Center groups, users, memberships, permission sets, and account assignments."""
 
     def service_name(self) -> str:
         return "sso"
@@ -45,7 +47,8 @@ class SsoResourcePlugin(AwsResourcePlugin):
                 return nodes, edges
 
             identity_store_id = instances[0].get("IdentityStoreId")
-            if not identity_store_id:
+            instance_arn = instances[0].get("InstanceArn")
+            if not identity_store_id or not instance_arn:
                 return nodes, edges
 
             group_urns_by_id: dict[str, URN] = {}
@@ -108,6 +111,92 @@ class SsoResourcePlugin(AwsResourcePlugin):
                     logger.exception(
                         "Failed to list memberships for group %s", group_id,
                     )
+
+            ps_arn_to_urn: dict[str, URN] = {}
+            ps_paginator = sso_admin.get_paginator("list_permission_sets")
+            for page in ps_paginator.paginate(InstanceArn=instance_arn):
+                for ps_arn in page.get("PermissionSets", []):
+                    try:
+                        described = sso_admin.describe_permission_set(
+                            InstanceArn=instance_arn,
+                            PermissionSetArn=ps_arn,
+                        ).get("PermissionSet", {})
+                    except Exception:
+                        logger.exception(
+                            "Failed to describe permission set %s", ps_arn,
+                        )
+                        continue
+
+                    ps_id = ps_arn.rsplit("/", 1)[-1]
+                    ps_urn = URN(f"urn:aws:sso:{account_id}::permission-set/{ps_id}")
+                    ps_arn_to_urn[ps_arn] = ps_urn
+                    nodes.append(PermissionSetNode.create(
+                        organization_id=organization_id,
+                        urn=ps_urn,
+                        parent_urn=account_urn,
+                        permission_set_arn=ps_arn,
+                        instance_arn=instance_arn,
+                        name=described.get("Name", ps_id),
+                        description=described.get("Description"),
+                        session_duration=described.get("SessionDuration"),
+                    ))
+
+            accounts_paginator = sso_admin.get_paginator(
+                "list_accounts_for_provisioned_permission_set",
+            )
+            assignments_paginator = sso_admin.get_paginator(
+                "list_account_assignments",
+            )
+            for ps_arn, ps_urn in ps_arn_to_urn.items():
+                try:
+                    provisioned_accounts: list[str] = []
+                    for page in accounts_paginator.paginate(
+                        InstanceArn=instance_arn,
+                        PermissionSetArn=ps_arn,
+                    ):
+                        provisioned_accounts.extend(page.get("AccountIds", []))
+                except Exception:
+                    logger.exception(
+                        "Failed to list provisioned accounts for permission set %s",
+                        ps_arn,
+                    )
+                    continue
+
+                for assigned_account_id in provisioned_accounts:
+                    try:
+                        for page in assignments_paginator.paginate(
+                            InstanceArn=instance_arn,
+                            AccountId=assigned_account_id,
+                            PermissionSetArn=ps_arn,
+                        ):
+                            for assignment in page.get("AccountAssignments", []):
+                                principal_type = assignment.get("PrincipalType")
+                                principal_id = assignment.get("PrincipalId")
+                                if not principal_id:
+                                    continue
+                                if principal_type == "USER":
+                                    principal_urn = user_urns_by_id.get(principal_id)
+                                elif principal_type == "GROUP":
+                                    principal_urn = group_urns_by_id.get(principal_id)
+                                else:
+                                    principal_urn = None
+                                if principal_urn is None:
+                                    logger.debug(
+                                        "Skipping assignment with unresolved principal %s/%s",
+                                        principal_type, principal_id,
+                                    )
+                                    continue
+                                edges.append(SsoAssignedToEdge.create(
+                                    organization_id=organization_id,
+                                    from_urn=principal_urn,
+                                    to_urn=ps_urn,
+                                    account_id=assigned_account_id,
+                                ))
+                    except Exception:
+                        logger.exception(
+                            "Failed to list account assignments for permission set %s in account %s",
+                            ps_arn, assigned_account_id,
+                        )
 
         except Exception:
             logger.exception("Failed to discover SSO resources")
