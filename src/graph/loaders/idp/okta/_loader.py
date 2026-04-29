@@ -9,6 +9,7 @@ import uuid
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+import aiohttp
 from okta.client import Client as OktaClient
 
 from src.graph.credentials import CredentialBase, OktaTokenCredential
@@ -163,22 +164,54 @@ class OktaLoader(ConceptLoader):
         return nodes, urns
 
     async def _load_applications(self, client: OktaClient) -> tuple[list[Node], dict[str, URN]]:
+        # We bypass the SDK here because okta-sdk-python's SamlApplication model declares
+        # 14 fields under settings.signOn as required, but Okta's API frequently returns
+        # SAML apps with sparse signOn settings — a single such app raises ValidationError
+        # mid-page and aborts the entire scan. We only need id/name/label/signOnMode/status,
+        # so we fetch the raw JSON ourselves and tolerate per-app missing fields.
+        del client  # kept for signature symmetry with the other loader methods
         nodes: list[Node] = []
         urns: dict[str, URN] = {}
-        async for app in self._paginate(client.list_applications):
-            urn = self.build_urn("app", app.id)
-            urns[app.id] = urn
+        async for app in self._paginate_apps_raw():
+            app_id = app.get("id")
+            if not app_id:
+                continue
+            urn = self.build_urn("app", app_id)
+            urns[app_id] = urn
             nodes.append(ApplicationNode.create(
                 organization_id=self.organization_id,
                 urn=urn,
-                okta_id=app.id,
-                name=getattr(app, "name", None),
-                label=getattr(app, "label", None),
-                sign_on_mode=getattr(app, "sign_on_mode", None),
-                status=getattr(app, "status", None),
+                okta_id=app_id,
+                name=app.get("name"),
+                label=app.get("label"),
+                sign_on_mode=app.get("signOnMode"),
+                status=app.get("status"),
             ))
         logger.info("Discovered %d Okta applications", len(urns))
         return nodes, urns
+
+    async def _paginate_apps_raw(self):
+        """Yield raw application dicts from /api/v1/apps, following Link rel=\"next\" cursors."""
+        url = f"https://{self._domain}/api/v1/apps"
+        headers = {
+            "Authorization": f"SSWS {self._api_token}",
+            "Accept": "application/json",
+        }
+        timeout = aiohttp.ClientTimeout(total=60)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            after: str | None = None
+            while True:
+                params: dict[str, Any] = {"limit": _PAGE_LIMIT}
+                if after:
+                    params["after"] = after
+                async with session.get(url, headers=headers, params=params) as resp:
+                    resp.raise_for_status()
+                    items = await resp.json()
+                    for item in items or []:
+                        yield item
+                    after = _next_cursor(resp.headers)
+                    if after is None:
+                        return
 
     # ── Edge discovery ────────────────────────────────────────────────────
 
