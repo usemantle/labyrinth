@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 import uuid
@@ -160,19 +161,31 @@ class OktaLoader(ConceptLoader):
         return nodes, urns
 
     async def _load_applications(self, client: OktaClient) -> tuple[list[Node], dict[str, URN]]:
+        """Discover Okta applications via raw HTTP, bypassing the SDK's strict model validation.
+
+        Some tenants return SAML applications missing ``settings.signOn.*`` fields the
+        SDK's ``SamlApplication`` model marks as required, which makes the SDK raise
+        ``pydantic.ValidationError`` while parsing an entire page of results. Since we
+        only need a few top-level fields (``id``, ``name``, ``label``, ``signOnMode``,
+        ``status``), we fire the same request via the SDK's ``RequestExecutor`` and
+        parse JSON ourselves.
+        """
         nodes: list[Node] = []
         urns: dict[str, URN] = {}
-        async for app in self._paginate(client.list_applications):
-            urn = self.build_urn("app", app.id)
-            urns[app.id] = urn
+        async for app in self._paginate_raw(client, "/api/v1/apps"):
+            app_id = app.get("id")
+            if not isinstance(app_id, str) or not app_id:
+                continue
+            urn = self.build_urn("app", app_id)
+            urns[app_id] = urn
             nodes.append(ApplicationNode.create(
                 organization_id=self.organization_id,
                 urn=urn,
-                okta_id=app.id,
-                name=getattr(app, "name", None),
-                label=getattr(app, "label", None),
-                sign_on_mode=getattr(app, "sign_on_mode", None),
-                status=getattr(app, "status", None),
+                okta_id=app_id,
+                name=app.get("name"),
+                label=app.get("label"),
+                sign_on_mode=app.get("signOnMode"),
+                status=app.get("status"),
             ))
         logger.info("Discovered %d Okta applications", len(urns))
         return nodes, urns
@@ -282,6 +295,35 @@ class OktaLoader(ConceptLoader):
             if after is None:
                 return
 
+    async def _paginate_raw(self, client: OktaClient, path: str):
+        """Yield raw JSON dicts from a paginated Okta REST endpoint.
+
+        Bypasses the SDK's model deserialization so a strict-validation failure on
+        one item doesn't blow up the whole page. Reuses the SDK's ``RequestExecutor``
+        for auth, retry, and rate-limit handling.
+        """
+        re = client.get_request_executor()
+        next_url: str | None = f"{path}?limit={_PAGE_LIMIT}"
+        while next_url:
+            request, error = await re.create_request(method="GET", url=next_url)
+            if error is not None:
+                raise _OktaPaginationError(str(error))
+            response, body, error = await re.execute(request, response_type=None)
+            if error is not None:
+                raise _OktaPaginationError(str(error))
+            try:
+                payload = json.loads(body) if body else []
+            except (ValueError, TypeError) as exc:
+                raise _OktaPaginationError(
+                    f"Could not parse Okta response body: {exc}",
+                ) from exc
+            if not isinstance(payload, list):
+                return
+            for item in payload:
+                if isinstance(item, dict):
+                    yield item
+            next_url = _next_url_from_link(getattr(response, "headers", None))
+
 
 def _full_name(profile) -> str | None:
     if profile is None:
@@ -313,3 +355,19 @@ def _next_cursor(headers) -> str | None:
     parsed = urlparse(match.group(1))
     values = parse_qs(parsed.query).get("after")
     return values[0] if values else None
+
+
+def _next_url_from_link(headers) -> str | None:
+    """Return the full path+query of an Okta Link rel=\"next\" header, or None."""
+    if not headers:
+        return None
+    link = headers.get("link") or headers.get("Link")
+    if not link:
+        return None
+    match = _LINK_NEXT_RE.search(link)
+    if not match:
+        return None
+    parsed = urlparse(match.group(1))
+    if not parsed.path:
+        return None
+    return f"{parsed.path}?{parsed.query}" if parsed.query else parsed.path
