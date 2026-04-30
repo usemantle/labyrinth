@@ -7,6 +7,7 @@ test simply seeds the fake client with canned responses and calls load().
 
 from __future__ import annotations
 
+import json
 import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -47,10 +48,36 @@ def _group(gid, *, name=None, description=None):
 
 
 def _app(aid, *, name=None, label=None, sign_on_mode="SAML_2_0", status="ACTIVE"):
-    return SimpleNamespace(
-        id=aid, name=name, label=label,
-        sign_on_mode=sign_on_mode, status=status,
-    )
+    """Build a raw-JSON app dict matching what the Okta REST API returns."""
+    return {
+        "id": aid,
+        "name": name,
+        "label": label,
+        "signOnMode": sign_on_mode,
+        "status": status,
+    }
+
+
+class _PagedRawAppsExecutor:
+    """Fake RequestExecutor that serves preconfigured app pages over the SDK contract.
+
+    Pages are a list of ``(items, link_header)`` tuples. Each ``execute`` call pops
+    the next page; ``link_header`` is None if no further pages exist.
+    """
+
+    def __init__(self, pages: list[tuple[list[dict], str | None]] | None = None):
+        self._pages = list(pages or [])
+
+    async def create_request(self, method: str, url: str, **kwargs):
+        return ({"method": method, "url": url}, None)
+
+    async def execute(self, request, response_type=None):
+        if not self._pages:
+            return (MagicMock(headers={}), "[]", None)
+        items, link = self._pages.pop(0)
+        headers = {"link": link} if link else {}
+        response = MagicMock(headers=headers)
+        return (response, json.dumps(items), None)
 
 
 def _app_user(uid):
@@ -72,16 +99,30 @@ def _push_mapping(source_group_id, *, target_group_id="tg", status="ACTIVE"):
 
 @pytest.fixture
 def fake_client(monkeypatch):
-    """Replaces OktaClient with a MagicMock whose list_* methods return mockable async results."""
+    """Replaces OktaClient with a MagicMock whose list_* methods return mockable async results.
+
+    The raw application discovery (``client.get_request_executor()``) is also mocked so
+    tests can configure paginated app responses by setting ``client._raw_app_pages``.
+    """
     client = MagicMock()
 
-    # Default: every list_* returns a single empty page.
+    # Default: every SDK list_* returns a single empty page.
     for method in [
-        "list_users", "list_groups", "list_applications",
+        "list_users", "list_groups",
         "list_group_users", "list_application_users",
         "list_application_group_assignments", "list_group_push_mappings",
     ]:
         setattr(client, method, AsyncMock(return_value=([], _resp(), None)))
+
+    # Default raw app pages: one empty page (no apps).
+    client._raw_app_pages = [([], None)]
+
+    def get_request_executor():
+        # Re-build the executor each time so each call sees a fresh copy of the
+        # caller-configured pages. Tests assign ``client._raw_app_pages`` BEFORE calling load().
+        return _PagedRawAppsExecutor(list(client._raw_app_pages))
+
+    client.get_request_executor = get_request_executor
 
     monkeypatch.setattr(
         "src.graph.loaders.idp.okta._loader.OktaClient",
@@ -165,10 +206,9 @@ class TestOktaLoaderLoad:
         fake_client.list_groups.return_value = (
             [_group("00g1", name="Engineering", description="Eng team")], _resp(), None,
         )
-        fake_client.list_applications.return_value = (
-            [_app("0oa1", name="amazon_aws", label="AWS Account Federation")],
-            _resp(), None,
-        )
+        fake_client._raw_app_pages = [
+            ([_app("0oa1", name="amazon_aws", label="AWS Account Federation")], None),
+        ]
         fake_client.list_group_users.return_value = (
             [_app_user("00u1"), _app_user("00u2")], _resp(), None,
         )
@@ -235,9 +275,9 @@ class TestOktaLoaderLoad:
 
     def test_group_push_error_is_silenced(self, fake_client):
         # One application; group-push call returns an error (not enabled for app).
-        fake_client.list_applications.return_value = (
-            [_app("0oa1", label="x")], _resp(), None,
-        )
+        fake_client._raw_app_pages = [
+            ([_app("0oa1", label="x")], None),
+        ]
         fake_client.list_group_push_mappings.return_value = (
             None, None, "Group Push not enabled for application",
         )
@@ -275,3 +315,49 @@ class TestOktaLoaderLoad:
         loader = OktaLoader(ORG_ID, DOMAIN, TOKEN)
         with pytest.raises(RuntimeError, match="boom"):
             loader.load(f"urn:okta:idp:{DOMAIN}::root")
+
+    def test_apps_paginate_via_link_header(self, fake_client):
+        # Two pages, second page has no Link header (last page).
+        page1_link = (
+            f'<https://{DOMAIN}/api/v1/apps?limit=200&after=cursor2>; rel="next"'
+        )
+        fake_client._raw_app_pages = [
+            ([_app("0oa1", label="App One")], page1_link),
+            ([_app("0oa2", label="App Two")], None),
+        ]
+        loader = OktaLoader(ORG_ID, DOMAIN, TOKEN)
+        nodes, _ = loader.load(f"urn:okta:idp:{DOMAIN}::root")
+
+        apps = [n for n in nodes if n.node_type == NodeType.APPLICATION]
+        labels = {n.metadata[NK.APP_LABEL] for n in apps}
+        assert labels == {"App One", "App Two"}
+
+    def test_apps_with_missing_optional_fields_still_loaded(self, fake_client):
+        # A SAML application missing every settings.signOn.* field — the SDK would
+        # raise pydantic.ValidationError on this, but the raw path doesn't care.
+        fake_client._raw_app_pages = [
+            ([{
+                "id": "0oaSAML",
+                "name": "amazon_aws",
+                "label": "Broken SAML App",
+                "signOnMode": "SAML_2_0",
+                "status": "ACTIVE",
+                "settings": {"signOn": {"defaultRelayState": None}},
+            }], None),
+        ]
+        loader = OktaLoader(ORG_ID, DOMAIN, TOKEN)
+        nodes, _ = loader.load(f"urn:okta:idp:{DOMAIN}::root")
+
+        apps = [n for n in nodes if n.node_type == NodeType.APPLICATION]
+        assert len(apps) == 1
+        assert apps[0].metadata[NK.APP_LABEL] == "Broken SAML App"
+        assert apps[0].metadata[NK.APP_SIGN_ON_MODE] == "SAML_2_0"
+
+    def test_apps_with_missing_id_skipped(self, fake_client):
+        fake_client._raw_app_pages = [
+            ([{"label": "Anonymous"}, {"id": "0oa-good", "label": "Has Id"}], None),
+        ]
+        loader = OktaLoader(ORG_ID, DOMAIN, TOKEN)
+        nodes, _ = loader.load(f"urn:okta:idp:{DOMAIN}::root")
+        apps = [n for n in nodes if n.node_type == NodeType.APPLICATION]
+        assert {n.metadata[NK.APP_LABEL] for n in apps} == {"Has Id"}
