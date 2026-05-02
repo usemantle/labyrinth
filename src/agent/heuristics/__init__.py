@@ -14,13 +14,11 @@ from src.agent.heuristics.insecure_endpoint import InsecureEndpoint
 from src.agent.heuristics.orphaned_ecr_repo import OrphanedEcrRepo
 from src.agent.heuristics.unlinked_dockerfile import UnlinkedDockerfile
 from src.agent.heuristics.unlinked_entrypoint import UnlinkedEntrypoint
-from src.agent.heuristics.unlinked_s3_code import UnlinkedS3Code
 from src.agent.heuristics.vulnerable_dependency import VulnerableDependency
 from src.mcp.graph_store import GraphStore
 
 ALL_HEURISTICS: list[BaseHeuristic] = [
     UnlinkedDockerfile(),
-    UnlinkedS3Code(),
     OrphanedEcrRepo(),
     InsecureEndpoint(),
     VulnerableDependency(),
@@ -62,7 +60,6 @@ __all__ = [
     "TerminalAction",
     "UnlinkedDockerfile",
     "UnlinkedEntrypoint",
-    "UnlinkedS3Code",
     "VulnerableDependency",
     "gather_all_candidates",
 ]

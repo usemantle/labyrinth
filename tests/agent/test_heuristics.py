@@ -14,7 +14,6 @@ from src.agent.heuristics import (
     OrphanedEcrRepo,
     UnlinkedDockerfile,
     UnlinkedEntrypoint,
-    UnlinkedS3Code,
     VulnerableDependency,
     gather_all_candidates,
 )
@@ -59,18 +58,6 @@ def ecr_node():
     }
 
 
-@pytest.fixture
-def function_with_s3():
-    return {
-        "urn": "urn:github:repo:org:::org/app/src/upload.py::upload_file",
-        "node_type": "function",
-        "metadata": {
-            "function_name": "upload_file",
-            "aws_s3_operations": ["put_object"],
-        },
-    }
-
-
 class TestUnlinkedDockerfile:
     heuristic = UnlinkedDockerfile()
 
@@ -101,42 +88,6 @@ class TestUnlinkedDockerfile:
         instructions = self.heuristic.get_instructions()
         assert "Dockerfile" in instructions
         assert "builds" in instructions
-
-    def test_terminal_actions(self):
-        assert self.heuristic.terminal_actions == [
-            TerminalAction.MARK_EVALUATED,
-            TerminalAction.CREATE_SOFT_LINK,
-        ]
-
-
-class TestUnlinkedS3Code:
-    heuristic = UnlinkedS3Code()
-
-    def test_returns_function_with_s3_ops(self, function_with_s3):
-        store = _make_store([function_with_s3])
-        try:
-            candidates = self.heuristic.find(store)
-            assert len(candidates) == 1
-            assert candidates[0].heuristic_name == "unlinked_s3_code"
-        finally:
-            store.stop_watcher()
-
-    def test_ignores_functions_without_s3(self):
-        node = {
-            "urn": "urn:github:repo:org:::org/app/src/main.py::main",
-            "node_type": "function",
-            "metadata": {"function_name": "main"},
-        }
-        store = _make_store([node])
-        try:
-            assert self.heuristic.find(store) == []
-        finally:
-            store.stop_watcher()
-
-    def test_get_instructions(self):
-        instructions = self.heuristic.get_instructions()
-        assert "S3" in instructions
-        assert "aws_s3_operations" in instructions
 
     def test_terminal_actions(self):
         assert self.heuristic.terminal_actions == [
@@ -372,7 +323,7 @@ class TestUnlinkedEntrypoint:
 
 
 class TestGatherAll:
-    def test_combines_all_heuristics(self, dockerfile_node, ecr_node, function_with_s3):
+    def test_combines_all_heuristics(self, dockerfile_node, ecr_node):
         # Add nodes for the new heuristics too
         unauthenticated_endpoint = {
             "urn": "urn:github:repo:org:::org/app/src/main.py::get_file",
@@ -400,14 +351,13 @@ class TestGatherAll:
             "dockerfile_cmd": '["python", "app.py"]',
         }
         store = _make_store([
-            dockerfile_with_cmd, ecr_node, function_with_s3,
+            dockerfile_with_cmd, ecr_node,
             unauthenticated_endpoint, vulnerable_dep,
         ])
         try:
             candidates = gather_all_candidates(store)
             heuristic_names = {c.heuristic_name for c in candidates}
             assert "unlinked_dockerfile" in heuristic_names
-            assert "unlinked_s3_code" in heuristic_names
             assert "orphaned_ecr_repo" in heuristic_names
             assert "insecure_endpoint" in heuristic_names
             assert "vulnerable_dependency" in heuristic_names

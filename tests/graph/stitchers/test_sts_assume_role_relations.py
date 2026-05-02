@@ -63,8 +63,7 @@ class TestStsAssumeRoleRelations:
         assert str(edge.to_urn) == str(b.urn)
         assert edge.metadata[EK.ASSUMED_VIA] == "iam:trust_policy"
 
-    def test_wildcard_principal_skipped(self):
-        a = _role("111111111111", "RoleA")
+    def test_wildcard_principal_emits_insecurity_edge(self):
         b = _role(
             "222222222222", "RoleB",
             trust_policy={
@@ -75,20 +74,100 @@ class TestStsAssumeRoleRelations:
                 }],
             },
         )
-        graph = Graph(nodes=[a, b])
+        graph = Graph(nodes=[b])
         result = StsAssumeRoleRelationsStitcher().stitch(ORG_ID, graph, {})
-        assert len(result.edges) == 0
+        edges = [e for e in result.edges if e.edge_type == EdgeType.ASSUMES]
+        assert len(edges) == 1
+        edge = edges[0]
+        assert str(edge.from_urn) == "urn:aws:iam:wildcard::*"
+        assert str(edge.to_urn) == str(b.urn)
+        assert edge.metadata[EK.ASSUMED_VIA] == "iam:trust_policy_wildcard"
+        assert edge.metadata[EK.INSECURE_TRUST_POLICY] == "wildcard"
 
-    def test_account_root_principal_skipped(self):
-        a = _role("111111111111", "RoleA")
+    def test_string_form_wildcard_principal_also_flags(self):
+        # Some trust policies use the bare-string form ``Principal: "*"`` rather
+        # than ``{"AWS": "*"}``. Both must produce the same flagging edge.
+        b = _role(
+            "222222222222", "RoleB",
+            trust_policy={
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": "sts:AssumeRole",
+                    "Principal": "*",
+                }],
+            },
+        )
+        result = StsAssumeRoleRelationsStitcher().stitch(ORG_ID, Graph(nodes=[b]), {})
+        edges = [e for e in result.edges if e.edge_type == EdgeType.ASSUMES]
+        assert len(edges) == 1
+        assert edges[0].metadata[EK.INSECURE_TRUST_POLICY] == "wildcard"
+
+    def test_account_root_principal_emits_insecurity_edge(self):
         b = _role(
             "222222222222", "RoleB",
             trust_policy=_trust(
                 allow_principals=["arn:aws:iam::111111111111:root"],
             ),
         )
-        graph = Graph(nodes=[a, b])
+        graph = Graph(nodes=[b])
         result = StsAssumeRoleRelationsStitcher().stitch(ORG_ID, graph, {})
+        edges = [e for e in result.edges if e.edge_type == EdgeType.ASSUMES]
+        assert len(edges) == 1
+        edge = edges[0]
+        assert str(edge.from_urn) == "urn:aws:iam:111111111111::root"
+        assert str(edge.to_urn) == str(b.urn)
+        assert edge.metadata[EK.ASSUMED_VIA] == "iam:trust_policy_account_root"
+        assert edge.metadata[EK.INSECURE_TRUST_POLICY] == "account_root"
+        assert edge.metadata[EK.ACCOUNT_ID] == "111111111111"
+
+    def test_saml_assume_role_with_saml_emits_edge(self):
+        b = _role(
+            "222222222222", "RoleB",
+            trust_policy={
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": ["sts:AssumeRoleWithSAML", "sts:TagSession"],
+                    "Principal": {
+                        "Federated": "arn:aws:iam::222222222222:saml-provider/MyExternalIdP",
+                    },
+                    "Condition": {
+                        "StringEquals": {"SAML:aud": "https://signin.aws.amazon.com/saml"},
+                    },
+                }],
+            },
+        )
+        result = StsAssumeRoleRelationsStitcher().stitch(ORG_ID, Graph(nodes=[b]), {})
+        edges = [e for e in result.edges if e.edge_type == EdgeType.ASSUMES]
+        assert len(edges) == 1
+        edge = edges[0]
+        assert str(edge.from_urn) == (
+            "urn:aws:iam:222222222222::saml-provider/MyExternalIdP"
+        )
+        assert edge.metadata[EK.ASSUMED_VIA] == "iam:trust_policy_saml"
+        assert edge.metadata[EK.SAML_PROVIDER_ARN] == (
+            "arn:aws:iam::222222222222:saml-provider/MyExternalIdP"
+        )
+
+    def test_aws_sso_saml_provider_skipped(self):
+        # AWSSSO_*_DO_NOT_DELETE providers are an internal AWS Identity Center
+        # detail; the structural link is emitted by IdentityCenterToIamStitcher,
+        # so this stitcher must NOT emit a redundant trust-policy edge.
+        b = _role(
+            "222222222222", "AWSReservedSSO_AdminAccess_abc12345",
+            trust_policy={
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": ["sts:AssumeRoleWithSAML", "sts:TagSession"],
+                    "Principal": {
+                        "Federated": (
+                            "arn:aws:iam::222222222222:"
+                            "saml-provider/AWSSSO_395a0154b50fb36e_DO_NOT_DELETE"
+                        ),
+                    },
+                }],
+            },
+        )
+        result = StsAssumeRoleRelationsStitcher().stitch(ORG_ID, Graph(nodes=[b]), {})
         assert len(result.edges) == 0
 
     def test_service_principal_does_not_emit_edge(self):

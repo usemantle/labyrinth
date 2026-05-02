@@ -128,6 +128,10 @@ class BaseHeuristic(ABC):
         def _hit(key: str, expected) -> bool:
             if key not in meta:
                 return False
+            # ``is True`` is a deliberate identity check, not a truthiness test:
+            # only the literal boolean True selects presence-only mode. Strings
+            # (including non-empty ones like "ACTIVE" or even "True") fall
+            # through to the value-equality branch below.
             if expected is True:
                 return True
             return meta[key] == expected

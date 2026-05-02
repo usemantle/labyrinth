@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from src.agent.heuristics._base import BaseHeuristic, TerminalAction
-from src.graph.graph_models import NodeType
+from src.graph.graph_models import NodeMetadataKey, NodeType
 
 
 class UnlinkedDockerfile(BaseHeuristic):
     name = "unlinked_dockerfile"
     source_node_type = NodeType.FILE
-    metadata_keys = {"dockerfile_base_images": True}
+    metadata_keys = {NodeMetadataKey.DOCKERFILE_BASE_IMAGES: True}
     terminal_actions = [TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_SOFT_LINK]
     skill_file = "link-dockerfile-to-ecr.md"
 

@@ -366,6 +366,8 @@ class EdgeMetadataKey(enum.StrEnum):
     PERMISSION_SET_ARN = "permission_set_arn"
     VIA_GROUP = "via_group"
     TRUST_POLICY_CONDITION = "trust_policy_condition"
+    INSECURE_TRUST_POLICY = "insecure_trust_policy"
+    SAML_PROVIDER_ARN = "saml_provider_arn"
 
 
 class _EnumKeyDict:

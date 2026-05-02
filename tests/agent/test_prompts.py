@@ -68,19 +68,19 @@ class TestBuildInvestigationPrompt:
 
     def test_includes_task_instruction(self):
         candidate = Candidate(
-            id=candidate_id("urn:test", "unlinked_s3_code"),
-            source_urn="urn:test",
-            source_node_type="function",
-            source_metadata={"aws_s3_operations": ["put_object"]},
-            heuristic_name="unlinked_s3_code",
-            terminal_actions=["mark_evaluated", "create_soft_link"],
+            id=candidate_id("urn:test:dep", "vulnerable_dependency"),
+            source_urn="urn:test:dep",
+            source_node_type="dependency",
+            source_metadata={"cve_ids": ["CVE-2024-1234"]},
+            heuristic_name="vulnerable_dependency",
+            terminal_actions=["mark_evaluated", "create_pr"],
             skill_file="",
         )
-        node = {"urn": "urn:test", "node_type": "function", "metadata": {}}
+        node = {"urn": "urn:test:dep", "node_type": "dependency", "metadata": {}}
         store = _make_store([node])
         try:
             prompt = build_investigation_prompt(candidate, store)
-            assert "S3 operations" in prompt
+            assert "CVE" in prompt
         finally:
             store.stop_watcher()
 
