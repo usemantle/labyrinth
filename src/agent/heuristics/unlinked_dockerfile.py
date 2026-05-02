@@ -9,7 +9,7 @@ from src.graph.graph_models import NodeType
 class UnlinkedDockerfile(BaseHeuristic):
     name = "unlinked_dockerfile"
     source_node_type = NodeType.FILE
-    metadata_keys = ["dockerfile_base_images"]
+    metadata_keys = {"dockerfile_base_images": True}
     terminal_actions = [TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_SOFT_LINK]
     skill_file = "link-dockerfile-to-ecr.md"
 

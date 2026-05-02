@@ -9,7 +9,7 @@ from src.graph.graph_models import NodeMetadataKey, NodeType
 class VulnerableDependency(BaseHeuristic):
     name = "vulnerable_dependency"
     source_node_type = NodeType.DEPENDENCY
-    metadata_keys = [NodeMetadataKey.CVE_IDS]
+    metadata_keys = {NodeMetadataKey.CVE_IDS: True}
     terminal_actions = [TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_PR]
     skill_file = "remediate-vulnerable-dependency.md"
 

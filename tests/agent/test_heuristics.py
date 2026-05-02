@@ -424,7 +424,7 @@ class TestGatherAll:
         extra = ConfigurableHeuristic(
             name="my_custom",
             source_node_type="function",
-            metadata_keys=["custom_flag"],
+            metadata_keys={"custom_flag": True},
             terminal_actions=[TerminalAction.MARK_EVALUATED],
         )
         store = _make_store([node])
@@ -446,7 +446,7 @@ class TestConfigurableHeuristic:
         h = ConfigurableHeuristic(
             name="test_or",
             source_node_type="function",
-            metadata_keys=["key_a", "key_b"],
+            metadata_keys={"key_a": True, "key_b": True},
             terminal_actions=[TerminalAction.MARK_EVALUATED],
             metadata_key_op="OR",
         )
@@ -465,7 +465,7 @@ class TestConfigurableHeuristic:
         h = ConfigurableHeuristic(
             name="test_or",
             source_node_type="function",
-            metadata_keys=["key_a", "key_b"],
+            metadata_keys={"key_a": True, "key_b": True},
             terminal_actions=[TerminalAction.MARK_EVALUATED],
             metadata_key_op="OR",
         )
@@ -489,7 +489,7 @@ class TestConfigurableHeuristic:
         h = ConfigurableHeuristic(
             name="test_and",
             source_node_type="function",
-            metadata_keys=["key_a", "key_b"],
+            metadata_keys={"key_a": True, "key_b": True},
             terminal_actions=[TerminalAction.MARK_EVALUATED],
             metadata_key_op="AND",
         )
@@ -509,7 +509,7 @@ class TestConfigurableHeuristic:
         h = ConfigurableHeuristic(
             name="test_all",
             source_node_type="function",
-            metadata_keys=[],
+            metadata_keys={},
             terminal_actions=[TerminalAction.MARK_EVALUATED],
         )
         store = _make_store(nodes)
@@ -522,7 +522,7 @@ class TestConfigurableHeuristic:
         h = ConfigurableHeuristic(
             name="test",
             source_node_type="function",
-            metadata_keys=[],
+            metadata_keys={},
             terminal_actions=[TerminalAction.MARK_EVALUATED],
             instructions="Custom investigation text.",
         )
@@ -532,7 +532,7 @@ class TestConfigurableHeuristic:
         h = ConfigurableHeuristic(
             name="test",
             source_node_type="file",
-            metadata_keys=["foo", "bar"],
+            metadata_keys={"foo": True, "bar": True},
             terminal_actions=[TerminalAction.MARK_EVALUATED],
             metadata_key_op="AND",
         )
@@ -546,7 +546,7 @@ class TestConfigurableHeuristic:
         h = ConfigurableHeuristic(
             name="roundtrip",
             source_node_type="dependency",
-            metadata_keys=["cve_ids", "severity"],
+            metadata_keys={"cve_ids": True, "severity": "high"},
             terminal_actions=[TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_PR],
             metadata_key_op="AND",
             instructions="Check CVEs.",
@@ -565,7 +565,7 @@ class TestConfigurableHeuristic:
         h = ConfigurableHeuristic(
             name="test",
             source_node_type="function",
-            metadata_keys=[],
+            metadata_keys={},
             terminal_actions=[TerminalAction.MARK_EVALUATED],
             skill_content="## My Playbook",
         )
@@ -575,7 +575,163 @@ class TestConfigurableHeuristic:
         h = ConfigurableHeuristic(
             name="test",
             source_node_type="function",
-            metadata_keys=[],
+            metadata_keys={},
             terminal_actions=[TerminalAction.MARK_EVALUATED],
         )
         assert h.get_playbook() is None
+
+
+class TestMatchesFilter:
+    """Direct coverage of BaseHeuristic._matches_filter dict semantics."""
+
+    def test_empty_filters_pass(self):
+        from src.agent.heuristics._base import BaseHeuristic
+        assert BaseHeuristic._matches_filter({"a": 1}, {}, "OR")
+        assert BaseHeuristic._matches_filter({}, {}, "AND")
+
+    def test_presence_check(self):
+        from src.agent.heuristics._base import BaseHeuristic
+        assert BaseHeuristic._matches_filter({"a": "x"}, {"a": True}, "OR")
+        assert not BaseHeuristic._matches_filter({"b": "x"}, {"a": True}, "OR")
+
+    def test_value_equality(self):
+        from src.agent.heuristics._base import BaseHeuristic
+        assert BaseHeuristic._matches_filter({"role": "admin"}, {"role": "admin"}, "OR")
+        assert not BaseHeuristic._matches_filter({"role": "user"}, {"role": "admin"}, "OR")
+        # Key missing: never passes even under OR with single filter.
+        assert not BaseHeuristic._matches_filter({}, {"role": "admin"}, "OR")
+
+    def test_and_requires_all(self):
+        from src.agent.heuristics._base import BaseHeuristic
+        meta = {"a": "x", "b": "y"}
+        assert BaseHeuristic._matches_filter(meta, {"a": True, "b": True}, "AND")
+        assert not BaseHeuristic._matches_filter(meta, {"a": True, "c": True}, "AND")
+        # Mixed presence + value, both true.
+        assert BaseHeuristic._matches_filter(meta, {"a": True, "b": "y"}, "AND")
+        # Value mismatch fails AND.
+        assert not BaseHeuristic._matches_filter(meta, {"a": True, "b": "z"}, "AND")
+
+    def test_or_requires_any(self):
+        from src.agent.heuristics._base import BaseHeuristic
+        meta = {"a": "x"}
+        assert BaseHeuristic._matches_filter(meta, {"a": True, "b": True}, "OR")
+        assert not BaseHeuristic._matches_filter(meta, {"b": True, "c": True}, "OR")
+
+
+class TestPathLinkedHeuristic:
+    """When dest_node_type is set, find() emits one Candidate per (source, dest) pair with a path."""
+
+    def _build_chain(self):
+        # sso_user -> permission_set -> iam_role  (linked via two edges)
+        nodes = [
+            {"urn": "urn:user:alice", "node_type": "sso_user",
+             "metadata": {"sso_user_id": "u-1"}},
+            {"urn": "urn:ps:admin", "node_type": "permission_set",
+             "metadata": {"permission_set_name": "AdminAccess"}},
+            {"urn": "urn:role:111:Admin", "node_type": "iam_role",
+             "metadata": {"role_name": "Admin"}},
+            {"urn": "urn:role:222:Reader", "node_type": "iam_role",
+             "metadata": {"role_name": "Reader"}},
+        ]
+        edges = [
+            {"uuid": "e1", "from_urn": "urn:user:alice", "to_urn": "urn:ps:admin",
+             "edge_type": "sso:assigned_to", "metadata": {}},
+            {"uuid": "e2", "from_urn": "urn:ps:admin", "to_urn": "urn:role:111:Admin",
+             "edge_type": "assumes", "metadata": {}},
+        ]
+        return nodes, edges
+
+    def test_emits_candidate_with_path(self):
+        nodes, edges = self._build_chain()
+        store = _make_store(nodes, edges)
+        try:
+            h = ConfigurableHeuristic(
+                name="user_to_admin_role",
+                source_node_type="sso_user",
+                metadata_keys={},
+                terminal_actions=[TerminalAction.MARK_EVALUATED],
+                dest_node_type="iam_role",
+                dest_node_metadata={"role_name": "Admin"},
+            )
+            candidates = h.find(store)
+            assert len(candidates) == 1
+            c = candidates[0]
+            assert c.source_urn == "urn:user:alice"
+            assert c.dest_urn == "urn:role:111:Admin"
+            assert c.dest_node_type == "iam_role"
+            assert c.dest_metadata == {"role_name": "Admin"}
+            assert c.path == [
+                "urn:user:alice", "urn:ps:admin", "urn:role:111:Admin",
+            ]
+        finally:
+            store.stop_watcher()
+
+    def test_unreachable_dest_dropped(self):
+        # Dest matches the value filter but no path connects to it.
+        nodes = [
+            {"urn": "urn:user:alice", "node_type": "sso_user", "metadata": {}},
+            {"urn": "urn:role:far", "node_type": "iam_role",
+             "metadata": {"role_name": "Admin"}},
+        ]
+        store = _make_store(nodes, [])
+        try:
+            h = ConfigurableHeuristic(
+                name="lonely",
+                source_node_type="sso_user",
+                metadata_keys={},
+                terminal_actions=[TerminalAction.MARK_EVALUATED],
+                dest_node_type="iam_role",
+                dest_node_metadata={"role_name": "Admin"},
+            )
+            assert h.find(store) == []
+        finally:
+            store.stop_watcher()
+
+    def test_value_filter_excludes_non_matching_dest(self):
+        # Two iam_roles reachable; only one matches the dest value filter.
+        nodes, edges = self._build_chain()
+        # Reader is reachable via direct user link.
+        edges.append({
+            "uuid": "e3", "from_urn": "urn:user:alice", "to_urn": "urn:role:222:Reader",
+            "edge_type": "assumes", "metadata": {},
+        })
+        store = _make_store(nodes, edges)
+        try:
+            h = ConfigurableHeuristic(
+                name="admin_only",
+                source_node_type="sso_user",
+                metadata_keys={},
+                terminal_actions=[TerminalAction.MARK_EVALUATED],
+                dest_node_type="iam_role",
+                dest_node_metadata={"role_name": "Admin"},
+            )
+            candidates = h.find(store)
+            assert len(candidates) == 1
+            assert candidates[0].dest_urn == "urn:role:111:Admin"
+        finally:
+            store.stop_watcher()
+
+    def test_pair_per_match_cardinality(self):
+        # One source, two reachable dests that both match presence filter.
+        nodes, edges = self._build_chain()
+        edges.append({
+            "uuid": "e3", "from_urn": "urn:user:alice", "to_urn": "urn:role:222:Reader",
+            "edge_type": "assumes", "metadata": {},
+        })
+        store = _make_store(nodes, edges)
+        try:
+            h = ConfigurableHeuristic(
+                name="all_iam_roles",
+                source_node_type="sso_user",
+                metadata_keys={},
+                terminal_actions=[TerminalAction.MARK_EVALUATED],
+                dest_node_type="iam_role",
+                dest_node_metadata={"role_name": True},
+            )
+            candidates = h.find(store)
+            dests = {c.dest_urn for c in candidates}
+            assert dests == {"urn:role:111:Admin", "urn:role:222:Reader"}
+            # IDs must differ even though source is the same.
+            assert candidates[0].id != candidates[1].id
+        finally:
+            store.stop_watcher()

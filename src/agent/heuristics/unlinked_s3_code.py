@@ -9,7 +9,7 @@ from src.graph.graph_models import NodeType
 class UnlinkedS3Code(BaseHeuristic):
     name = "unlinked_s3_code"
     source_node_type = NodeType.FUNCTION
-    metadata_keys = ["aws_s3_operations"]
+    metadata_keys = {"aws_s3_operations": True}
     terminal_actions = [TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_SOFT_LINK]
     skill_file = "link-code-to-s3.md"
 
