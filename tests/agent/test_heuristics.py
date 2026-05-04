@@ -499,8 +499,7 @@ class TestConfigurableHeuristic:
             metadata_keys={"cve_ids": True, "severity": "high"},
             terminal_actions=[TerminalAction.MARK_EVALUATED, TerminalAction.CREATE_PR],
             metadata_key_op="AND",
-            instructions="Check CVEs.",
-            skill_content="## Playbook\nInvestigate CVEs.",
+            instructions="Check CVEs.\n\n## Playbook\nInvestigate CVEs.",
         )
         restored = ConfigurableHeuristic.from_dict(h.to_dict())
         assert restored.name == h.name
@@ -509,17 +508,6 @@ class TestConfigurableHeuristic:
         assert restored.metadata_key_op == h.metadata_key_op
         assert restored.terminal_actions == h.terminal_actions
         assert restored.instructions == h.instructions
-        assert restored.skill_content == h.skill_content
-
-    def test_get_playbook_returns_skill_content(self):
-        h = ConfigurableHeuristic(
-            name="test",
-            source_node_type="function",
-            metadata_keys={},
-            terminal_actions=[TerminalAction.MARK_EVALUATED],
-            skill_content="## My Playbook",
-        )
-        assert h.get_playbook() == "## My Playbook"
 
     def test_get_playbook_returns_none_when_empty(self):
         h = ConfigurableHeuristic(

@@ -96,9 +96,8 @@ class BaseHeuristic(ABC):
     # ── Terminal actions ──
     terminal_actions: list[TerminalAction] = [TerminalAction.MARK_EVALUATED]
 
-    # ── Skill file / content (optional) ──
+    # ── Skill file (optional) ──
     skill_file: str = ""
-    skill_content: str = ""  # inline skill text (overrides skill_file if set)
 
     @property
     def needs_github(self) -> bool:
@@ -236,9 +235,7 @@ class BaseHeuristic(ABC):
         """Return investigation instructions for the agent."""
 
     def get_playbook(self) -> str | None:
-        """Return the skill content, or None if neither skill_content nor skill_file is set."""
-        if self.skill_content:
-            return self.skill_content
+        """Return the contents of ``skill_file`` (under ``SKILL_DIR``), or None if unset."""
         if not self.skill_file:
             return None
         path = SKILL_DIR / self.skill_file

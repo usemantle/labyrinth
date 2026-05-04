@@ -15,7 +15,9 @@ class ConfigurableHeuristic(BaseHeuristic):
     AND equal to this value". See :class:`BaseHeuristic` for the full
     semantics, including the optional ``dest_node_type`` path-linking mode.
 
-    Skill content is stored inline (``skill_content``) rather than as a file path.
+    The ``instructions`` text is the agent prompt; there is no separate
+    inline-skill field — anything previously kept in ``skill_content`` should
+    be merged into ``instructions``.
     """
 
     def __init__(
@@ -26,7 +28,6 @@ class ConfigurableHeuristic(BaseHeuristic):
         terminal_actions: list[TerminalAction],
         metadata_key_op: Literal["AND", "OR"] = "OR",
         instructions: str = "",
-        skill_content: str = "",
         dest_node_type: str | None = None,
         dest_node_metadata: MetadataFilter | None = None,
         dest_metadata_key_op: Literal["AND", "OR"] = "OR",
@@ -37,7 +38,6 @@ class ConfigurableHeuristic(BaseHeuristic):
         self.terminal_actions = terminal_actions
         self.metadata_key_op = metadata_key_op
         self.instructions = instructions
-        self.skill_content = skill_content
         self.dest_node_type = dest_node_type
         self.dest_node_metadata = dest_node_metadata or {}
         self.dest_metadata_key_op = dest_metadata_key_op
@@ -66,9 +66,6 @@ class ConfigurableHeuristic(BaseHeuristic):
             )
         return base
 
-    def get_playbook(self) -> str | None:
-        return self.skill_content or super().get_playbook()
-
     def to_dict(self) -> dict:
         return {
             "name": self.name,
@@ -77,7 +74,6 @@ class ConfigurableHeuristic(BaseHeuristic):
             "metadata_key_op": self.metadata_key_op,
             "terminal_actions": [str(a) for a in self.terminal_actions],
             "instructions": self.instructions,
-            "skill_content": self.skill_content,
             "dest_node_type": self.dest_node_type,
             "dest_node_metadata": self.dest_node_metadata,
             "dest_metadata_key_op": self.dest_metadata_key_op,
@@ -95,7 +91,6 @@ class ConfigurableHeuristic(BaseHeuristic):
             ],
             metadata_key_op=data.get("metadata_key_op", "OR"),
             instructions=data.get("instructions", ""),
-            skill_content=data.get("skill_content", ""),
             dest_node_type=data.get("dest_node_type"),
             dest_node_metadata=data.get("dest_node_metadata", {}),
             dest_metadata_key_op=data.get("dest_metadata_key_op", "OR"),
