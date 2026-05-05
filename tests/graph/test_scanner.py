@@ -6,8 +6,8 @@ import uuid
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.graph.graph_models import Graph, Node, NodeMetadata, NodeMetadataKey, URN
-from src.graph.scanner import Scanner
+from labyrinth.graph.graph_models import Graph, Node, NodeMetadata, NodeMetadataKey, URN
+from labyrinth.graph.scanner import Scanner
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey

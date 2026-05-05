@@ -7,20 +7,20 @@ from unittest.mock import MagicMock, patch
 
 from mcp.server.fastmcp import FastMCP
 
-from src.drivers.sql.models import (
+from labyrinth.drivers.sql.models import (
     ColumnMetadata,
     GrantMetadata,
     RoleMetadata,
     SchemaMetadata,
     TableMetadata,
 )
-from src.graph.edges.reads_edge import ReadsEdge
-from src.graph.edges.writes_edge import WritesEdge
-from src.graph.graph_models import NodeMetadataKey
-from src.graph.loaders.postgres.onprem_postgres_loader import OnPremPostgresLoader
-from src.graph.sinks.json_file_sink import classify_node
-from src.mcp.graph_store import GraphStore
-from src.mcp.tools.security import register
+from labyrinth.graph.edges.reads_edge import ReadsEdge
+from labyrinth.graph.edges.writes_edge import WritesEdge
+from labyrinth.graph.graph_models import NodeMetadataKey
+from labyrinth.graph.loaders.postgres.onprem_postgres_loader import OnPremPostgresLoader
+from labyrinth.graph.sinks.json_file_sink import classify_node
+from labyrinth.mcp.graph_store import GraphStore
+from labyrinth.mcp.tools.security import register
 
 NK = NodeMetadataKey
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
@@ -46,7 +46,7 @@ def _build_mock_driver(roles=None, grants=None):
 
 def _load_with_mock(roles=None, grants=None):
     with patch(
-        "src.graph.loaders.postgres.postgres_loader.BaseDiscoveryDriver.get_driver"
+        "labyrinth.graph.loaders.postgres.postgres_loader.BaseDiscoveryDriver.get_driver"
     ) as mock_get:
         mock_get.return_value = _build_mock_driver(roles, grants)
         loader = OnPremPostgresLoader(organization_id=ORG_ID, resource=RESOURCE)

@@ -2,12 +2,12 @@
 
 import uuid
 
-from src.graph.edges.protected_by_edge import ProtectedByEdge
-from src.graph.graph_models import URN, EdgeType, Graph, NodeMetadataKey
-from src.graph.nodes.ecs_service_node import EcsServiceNode
-from src.graph.nodes.load_balancer_node import LoadBalancerNode
-from src.graph.nodes.security_group_node import SecurityGroupNode
-from src.graph.stitchers.sg_resolver import SecurityGroupResolver
+from labyrinth.graph.edges.protected_by_edge import ProtectedByEdge
+from labyrinth.graph.graph_models import URN, EdgeType, Graph, NodeMetadataKey
+from labyrinth.graph.nodes.ecs_service_node import EcsServiceNode
+from labyrinth.graph.nodes.load_balancer_node import LoadBalancerNode
+from labyrinth.graph.nodes.security_group_node import SecurityGroupNode
+from labyrinth.graph.stitchers.sg_resolver import SecurityGroupResolver
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey

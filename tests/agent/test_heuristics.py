@@ -7,8 +7,8 @@ import tempfile
 
 import pytest
 
-from src.agent.candidates import candidate_id
-from src.agent.heuristics import (
+from labyrinth.agent.candidates import candidate_id
+from labyrinth.agent.heuristics import (
     ConfigurableHeuristic,
     InsecureEndpoint,
     OrphanedEcrRepo,
@@ -17,8 +17,8 @@ from src.agent.heuristics import (
     VulnerableDependency,
     gather_all_candidates,
 )
-from src.agent.heuristics._base import TerminalAction
-from src.mcp.graph_store import GraphStore
+from labyrinth.agent.heuristics._base import TerminalAction
+from labyrinth.mcp.graph_store import GraphStore
 
 
 def _make_store(nodes: list[dict], edges: list[dict] | None = None) -> GraphStore:
@@ -523,24 +523,24 @@ class TestMatchesFilter:
     """Direct coverage of BaseHeuristic._matches_filter dict semantics."""
 
     def test_empty_filters_pass(self):
-        from src.agent.heuristics._base import BaseHeuristic
+        from labyrinth.agent.heuristics._base import BaseHeuristic
         assert BaseHeuristic._matches_filter({"a": 1}, {}, "OR")
         assert BaseHeuristic._matches_filter({}, {}, "AND")
 
     def test_presence_check(self):
-        from src.agent.heuristics._base import BaseHeuristic
+        from labyrinth.agent.heuristics._base import BaseHeuristic
         assert BaseHeuristic._matches_filter({"a": "x"}, {"a": True}, "OR")
         assert not BaseHeuristic._matches_filter({"b": "x"}, {"a": True}, "OR")
 
     def test_value_equality(self):
-        from src.agent.heuristics._base import BaseHeuristic
+        from labyrinth.agent.heuristics._base import BaseHeuristic
         assert BaseHeuristic._matches_filter({"role": "admin"}, {"role": "admin"}, "OR")
         assert not BaseHeuristic._matches_filter({"role": "user"}, {"role": "admin"}, "OR")
         # Key missing: never passes even under OR with single filter.
         assert not BaseHeuristic._matches_filter({}, {"role": "admin"}, "OR")
 
     def test_and_requires_all(self):
-        from src.agent.heuristics._base import BaseHeuristic
+        from labyrinth.agent.heuristics._base import BaseHeuristic
         meta = {"a": "x", "b": "y"}
         assert BaseHeuristic._matches_filter(meta, {"a": True, "b": True}, "AND")
         assert not BaseHeuristic._matches_filter(meta, {"a": True, "c": True}, "AND")
@@ -550,7 +550,7 @@ class TestMatchesFilter:
         assert not BaseHeuristic._matches_filter(meta, {"a": True, "b": "z"}, "AND")
 
     def test_or_requires_any(self):
-        from src.agent.heuristics._base import BaseHeuristic
+        from labyrinth.agent.heuristics._base import BaseHeuristic
         meta = {"a": "x"}
         assert BaseHeuristic._matches_filter(meta, {"a": True, "b": True}, "OR")
         assert not BaseHeuristic._matches_filter(meta, {"b": True, "c": True}, "OR")

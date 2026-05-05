@@ -2,9 +2,9 @@
 
 import uuid
 
-from src.graph.graph_models import URN, Node, NodeMetadataKey
-from src.graph.nodes.image_node import ImageNode
-from src.graph.nodes.image_repository_node import ImageRepositoryNode
+from labyrinth.graph.graph_models import URN, Node, NodeMetadataKey
+from labyrinth.graph.nodes.image_node import ImageNode
+from labyrinth.graph.nodes.image_repository_node import ImageRepositoryNode
 
 NK = NodeMetadataKey
 ORG_ID = uuid.uuid4()

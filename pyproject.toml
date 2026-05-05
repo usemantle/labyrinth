@@ -20,18 +20,18 @@ dependencies = [
 ]
 
 [project.scripts]
-labyrinth = "src.cli.main:cli"
+labyrinth = "labyrinth.cli.main:cli"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["labyrinth"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"src/cli/serve" = "src/cli/serve"
-"src/agent/skills" = "src/agent/skills"
+"labyrinth/cli/serve" = "labyrinth/cli/serve"
+"labyrinth/agent/skills" = "labyrinth/agent/skills"
 
 [tool.uv]
 dev-dependencies = [
@@ -64,14 +64,14 @@ ignore = [
 ]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["labyrinth"]
 
 [tool.coverage.report]
 show_missing = true
 skip_empty = true
 
 [tool.pyrefly]
-project-includes = ["src"]
+project-includes = ["labyrinth"]
 search-path = ["."]
 python-platform = "linux"
 python-version = "3.13"

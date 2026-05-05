@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.graph.graph_models import NodeMetadata, NodeMetadataKey, edge_namespace
+from labyrinth.graph.graph_models import NodeMetadata, NodeMetadataKey, edge_namespace
 
 NK = NodeMetadataKey
 

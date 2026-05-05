@@ -2,8 +2,8 @@
 
 import uuid
 
-from src.graph.edges.builds_edge import BuildsEdge
-from src.graph.graph_models import URN, Edge, EdgeMetadata, EdgeMetadataKey
+from labyrinth.graph.edges.builds_edge import BuildsEdge
+from labyrinth.graph.graph_models import URN, Edge, EdgeMetadata, EdgeMetadataKey
 
 ORG_ID = uuid.uuid4()
 FROM_URN = URN("urn:github:repo:org:::org/repo/Dockerfile")

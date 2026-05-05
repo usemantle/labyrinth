@@ -4,8 +4,8 @@ import uuid
 
 import pytest
 
-from src.graph.graph_models import URN, Node, NodeMetadataKey
-from src.graph.nodes import (
+from labyrinth.graph.graph_models import URN, Node, NodeMetadataKey
+from labyrinth.graph.nodes import (
     BucketNode,
     ClassNode,
     CodebaseNode,

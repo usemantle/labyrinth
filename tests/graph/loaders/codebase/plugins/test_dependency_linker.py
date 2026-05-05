@@ -3,14 +3,14 @@
 import uuid
 from pathlib import Path
 
-from src.graph.graph_models import (
+from labyrinth.graph.graph_models import (
     URN,
     Node,
     NodeMetadata,
     NodeMetadataKey,
 )
-from src.graph.loaders.codebase.codebase_loader import PostProcessContext
-from src.graph.loaders.codebase.plugins.python_dependency_linker import (
+from labyrinth.graph.loaders.codebase.codebase_loader import PostProcessContext
+from labyrinth.graph.loaders.codebase.plugins.python_dependency_linker import (
     PythonDependencyLinkerPlugin,
     _build_import_map,
     _find_site_packages,

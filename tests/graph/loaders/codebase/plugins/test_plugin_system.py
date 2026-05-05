@@ -7,11 +7,11 @@ and that the loader works without plugins (backward compat).
 
 import uuid
 
-from src.graph.graph_models import (
+from labyrinth.graph.graph_models import (
     NodeMetadataKey,
 )
-from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
-from src.graph.loaders.codebase.plugins import CodebasePlugin
+from labyrinth.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
+from labyrinth.graph.loaders.codebase.plugins import CodebasePlugin
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 

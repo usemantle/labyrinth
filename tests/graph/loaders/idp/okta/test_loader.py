@@ -14,8 +14,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.graph.graph_models import URN, EdgeType, NodeMetadataKey, NodeType
-from src.graph.loaders.idp.okta._loader import OktaLoader
+from labyrinth.graph.graph_models import URN, EdgeType, NodeMetadataKey, NodeType
+from labyrinth.graph.loaders.idp.okta._loader import OktaLoader
 
 NK = NodeMetadataKey
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
@@ -125,7 +125,7 @@ def fake_client(monkeypatch):
     client.get_request_executor = get_request_executor
 
     monkeypatch.setattr(
-        "src.graph.loaders.idp.okta._loader.OktaClient",
+        "labyrinth.graph.loaders.idp.okta._loader.OktaClient",
         lambda config: client,
     )
     return client
@@ -144,7 +144,7 @@ class TestOktaLoaderClassmethods:
         assert components[0].name == "domain"
 
     def test_credential_type(self):
-        from src.graph.credentials import OktaTokenCredential
+        from labyrinth.graph.credentials import OktaTokenCredential
         assert OktaLoader.credential_type() is OktaTokenCredential
 
     def test_build_target_urn(self):

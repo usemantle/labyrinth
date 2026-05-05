@@ -6,8 +6,8 @@ import json
 import uuid
 from pathlib import Path
 
-from src.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
-from src.graph.sinks.json_file_sink import JsonFileSink
+from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.sinks.json_file_sink import JsonFileSink
 
 
 def _make_ecr_node(org_id: uuid.UUID, repo_name: str) -> Node:
@@ -49,7 +49,7 @@ class TestNodeDeduplication:
         assert urns.count("urn:aws:ecr:123456789:us-east-1:my-app") == 2
 
         # Now verify that GraphStore deduplicates at load time
-        from src.mcp.graph_store import GraphStore
+        from labyrinth.mcp.graph_store import GraphStore
 
         store = GraphStore(str(tmp_path / "graph.json"))
         try:

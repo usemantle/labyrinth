@@ -7,13 +7,13 @@ from unittest.mock import patch
 
 from mcp.server.fastmcp import FastMCP
 
-from src.graph.graph_models import NodeMetadataKey, NodeType
-from src.graph.loaders.codebase.cve.osv_client import OsvResult
-from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
-from src.graph.loaders.codebase.plugins import UvPlugin
-from src.graph.sinks.json_file_sink import classify_node
-from src.mcp.graph_store import GraphStore
-from src.mcp.tools.security import register
+from labyrinth.graph.graph_models import NodeMetadataKey, NodeType
+from labyrinth.graph.loaders.codebase.cve.osv_client import OsvResult
+from labyrinth.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
+from labyrinth.graph.loaders.codebase.plugins import UvPlugin
+from labyrinth.graph.sinks.json_file_sink import classify_node
+from labyrinth.mcp.graph_store import GraphStore
+from labyrinth.mcp.tools.security import register
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey
@@ -110,7 +110,7 @@ def _find_manifest(nodes):
     return None
 
 
-@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_package_node_creation(mock_osv, tmp_path):
     mock_osv.return_value = OsvResult()
     repo = _make_repo(tmp_path)
@@ -126,7 +126,7 @@ def test_package_node_creation(mock_osv, tmp_path):
     assert flask.metadata[NK.PACKAGE_VERSION] == "2.0.0"
 
 
-@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_manifest_node_created(mock_osv, tmp_path):
     """A package_manifest node is created to represent the lockfile."""
     mock_osv.return_value = OsvResult()
@@ -146,7 +146,7 @@ def test_manifest_node_created(mock_osv, tmp_path):
     assert len(contains_to_manifest) == 1
 
 
-@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_manifest_depends_on_dependencies(mock_osv, tmp_path):
     """The manifest node has depends_on edges to each dependency."""
     mock_osv.return_value = OsvResult()
@@ -165,7 +165,7 @@ def test_manifest_depends_on_dependencies(mock_osv, tmp_path):
     assert len(depends_on_edges) == 1
 
 
-@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_no_contains_edge_to_dependency(mock_osv, tmp_path):
     """Dependencies should NOT have contains edges from the codebase."""
     mock_osv.return_value = OsvResult()
@@ -180,7 +180,7 @@ def test_no_contains_edge_to_dependency(mock_osv, tmp_path):
     assert len(contains_to_dep) == 0
 
 
-@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_cve_on_vulnerable_package(mock_osv, tmp_path):
     def osv_side_effect(name, version, ecosystem):
         if name == "requests":
@@ -195,7 +195,7 @@ def test_cve_on_vulnerable_package(mock_osv, tmp_path):
     assert req.metadata[NK.CVE_IDS] == "CVE-2023-32681"
 
 
-@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_no_cve_on_clean_package(mock_osv, tmp_path):
     mock_osv.return_value = OsvResult()
     repo = _make_repo(tmp_path)
@@ -205,7 +205,7 @@ def test_no_cve_on_clean_package(mock_osv, tmp_path):
     assert NK.CVE_IDS not in flask.metadata
 
 
-@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_missing_lock_file(mock_osv, tmp_path):
     repo = _make_repo(tmp_path, lock_content=None)
     nodes, edges = _load(repo)
@@ -215,7 +215,7 @@ def test_missing_lock_file(mock_osv, tmp_path):
     mock_osv.assert_not_called()
 
 
-@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_osv_error_resilience(mock_osv, tmp_path):
     mock_osv.return_value = OsvResult(error="timeout")
     repo = _make_repo(tmp_path)
@@ -226,7 +226,7 @@ def test_osv_error_resilience(mock_osv, tmp_path):
     assert NK.CVE_IDS not in req.metadata
 
 
-@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_multiple_cves_comma_separated(mock_osv, tmp_path):
     mock_osv.return_value = OsvResult(
         cve_ids=["CVE-2021-11111", "CVE-2022-22222"]
@@ -238,7 +238,7 @@ def test_multiple_cves_comma_separated(mock_osv, tmp_path):
     assert req.metadata[NK.CVE_IDS] == "CVE-2021-11111,CVE-2022-22222"
 
 
-@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_transitive_depends_on_edges(mock_osv, tmp_path):
     """Dependency nodes are linked via DEPENDS_ON based on uv.lock dependencies."""
     mock_osv.return_value = OsvResult()
@@ -257,7 +257,7 @@ def test_transitive_depends_on_edges(mock_osv, tmp_path):
     assert any(e.from_urn == jose.urn and e.to_urn == ecdsa.urn for e in dep_edges)
 
 
-@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_transitive_chain_depth(mock_osv, tmp_path):
     """my-app → requests → urllib3 forms a transitive chain."""
     mock_osv.return_value = OsvResult()
@@ -276,7 +276,7 @@ def test_transitive_chain_depth(mock_osv, tmp_path):
     assert any(e.from_urn == requests.urn and e.to_urn == urllib3.urn for e in dep_edges)
 
 
-@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_no_transitive_edges_without_dependencies(mock_osv, tmp_path):
     """Packages without a dependencies field produce no transitive DEPENDS_ON edges."""
     mock_osv.return_value = OsvResult()
@@ -290,7 +290,7 @@ def test_no_transitive_edges_without_dependencies(mock_osv, tmp_path):
     assert all(e.from_urn == manifest.urn for e in dep_edges)
 
 
-@patch("src.graph.loaders.codebase.plugins.uv_plugin.query_osv")
+@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
 def test_transitive_cve_reachable_via_blast_radius(mock_osv, tmp_path):
     """blast_radius from a file importing python-jose reaches cryptography's CVE."""
     def osv_side_effect(name, version, ecosystem):

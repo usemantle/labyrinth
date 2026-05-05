@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import uuid
 
-from src.graph.graph_models import (
+from labyrinth.graph.graph_models import (
     URN,
     EdgeMetadataKey,
     EdgeType,
     Graph,
     NodeMetadataKey,
 )
-from src.graph.nodes.iam_role_node import IamRoleNode
-from src.graph.stitchers.sts_assume_role_relations import StsAssumeRoleRelationsStitcher
+from labyrinth.graph.nodes.iam_role_node import IamRoleNode
+from labyrinth.graph.stitchers.sts_assume_role_relations import StsAssumeRoleRelationsStitcher
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey

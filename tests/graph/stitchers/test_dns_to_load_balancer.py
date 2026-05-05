@@ -2,10 +2,10 @@
 
 import uuid
 
-from src.graph.graph_models import URN, EdgeType, Graph, NodeMetadataKey
-from src.graph.nodes.dns_record_node import DnsRecordNode
-from src.graph.nodes.load_balancer_node import LoadBalancerNode
-from src.graph.stitchers.dns_to_load_balancer import DnsToLoadBalancerStitcher
+from labyrinth.graph.graph_models import URN, EdgeType, Graph, NodeMetadataKey
+from labyrinth.graph.nodes.dns_record_node import DnsRecordNode
+from labyrinth.graph.nodes.load_balancer_node import LoadBalancerNode
+from labyrinth.graph.stitchers.dns_to_load_balancer import DnsToLoadBalancerStitcher
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey

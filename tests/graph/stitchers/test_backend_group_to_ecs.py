@@ -2,10 +2,10 @@
 
 import uuid
 
-from src.graph.graph_models import URN, EdgeType, Graph, NodeMetadataKey
-from src.graph.nodes.backend_group_node import BackendGroupNode
-from src.graph.nodes.ecs_service_node import EcsServiceNode
-from src.graph.stitchers.backend_group_to_ecs import BackendGroupToEcsStitcher
+from labyrinth.graph.graph_models import URN, EdgeType, Graph, NodeMetadataKey
+from labyrinth.graph.nodes.backend_group_node import BackendGroupNode
+from labyrinth.graph.nodes.ecs_service_node import EcsServiceNode
+from labyrinth.graph.stitchers.backend_group_to_ecs import BackendGroupToEcsStitcher
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey

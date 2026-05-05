@@ -5,7 +5,7 @@ import json
 from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError, URLError
 
-from src.graph.loaders.codebase.cve.osv_client import query_osv
+from labyrinth.graph.loaders.codebase.cve.osv_client import query_osv
 
 
 def _mock_response(data: dict) -> MagicMock:
@@ -18,7 +18,7 @@ def _mock_response(data: dict) -> MagicMock:
     return resp
 
 
-@patch("src.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
+@patch("labyrinth.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
 def test_vulnerable_package(mock_urlopen):
     mock_urlopen.return_value = _mock_response({
         "vulns": [
@@ -31,7 +31,7 @@ def test_vulnerable_package(mock_urlopen):
     assert result.error is None
 
 
-@patch("src.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
+@patch("labyrinth.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
 def test_clean_package(mock_urlopen):
     mock_urlopen.return_value = _mock_response({"vulns": []})
     result = query_osv("requests", "2.31.0", "PyPI")
@@ -40,7 +40,7 @@ def test_clean_package(mock_urlopen):
     assert result.error is None
 
 
-@patch("src.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
+@patch("labyrinth.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
 def test_missing_vulns_key(mock_urlopen):
     mock_urlopen.return_value = _mock_response({})
     result = query_osv("unknown-pkg", "1.0.0", "PyPI")
@@ -49,7 +49,7 @@ def test_missing_vulns_key(mock_urlopen):
     assert result.error is None
 
 
-@patch("src.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
+@patch("labyrinth.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
 def test_network_error(mock_urlopen):
     mock_urlopen.side_effect = URLError("Connection refused")
     result = query_osv("requests", "2.25.0", "PyPI")
@@ -58,7 +58,7 @@ def test_network_error(mock_urlopen):
     assert "Connection refused" in result.error
 
 
-@patch("src.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
+@patch("labyrinth.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
 def test_http_500_error(mock_urlopen):
     mock_urlopen.side_effect = HTTPError(
         url="https://api.osv.dev/v1/query",
@@ -72,7 +72,7 @@ def test_http_500_error(mock_urlopen):
     assert result.error is not None
 
 
-@patch("src.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
+@patch("labyrinth.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
 def test_correct_payload(mock_urlopen):
     mock_urlopen.return_value = _mock_response({"vulns": []})
     query_osv("flask", "2.0.0", "PyPI")
@@ -86,7 +86,7 @@ def test_correct_payload(mock_urlopen):
     }
 
 
-@patch("src.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
+@patch("labyrinth.graph.loaders.codebase.cve.osv_client.urllib.request.urlopen")
 def test_dedup_aliases(mock_urlopen):
     mock_urlopen.return_value = _mock_response({
         "vulns": [

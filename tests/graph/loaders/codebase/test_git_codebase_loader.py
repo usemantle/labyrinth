@@ -10,10 +10,10 @@ from unittest.mock import patch
 
 import pytest
 
-from src.graph.graph_models import (
+from labyrinth.graph.graph_models import (
     NodeMetadataKey,
 )
-from src.graph.loaders.codebase.git_codebase_loader import GitCodebaseLoader
+from labyrinth.graph.loaders.codebase.git_codebase_loader import GitCodebaseLoader
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 
@@ -97,7 +97,7 @@ def git_result(tmp_path):
     """Run GitCodebaseLoader on a temporary repo."""
     repo = _make_tmp_repo(tmp_path)
     with patch(
-        "src.graph.loaders.codebase.git_codebase_loader.GitCodebaseLoader._get_head_commit"
+        "labyrinth.graph.loaders.codebase.git_codebase_loader.GitCodebaseLoader._get_head_commit"
     ) as mock_commit:
         mock_commit.return_value = "abc123def456"
         loader = GitCodebaseLoader(

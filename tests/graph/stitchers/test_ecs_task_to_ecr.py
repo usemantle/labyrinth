@@ -2,8 +2,8 @@
 
 import uuid
 
-from src.graph.graph_models import URN, EdgeType, Graph, Node, NodeMetadata, NodeMetadataKey, NodeType
-from src.graph.stitchers.ecs_task_to_ecr import EcsTaskToEcrStitcher
+from labyrinth.graph.graph_models import URN, EdgeType, Graph, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.stitchers.ecs_task_to_ecr import EcsTaskToEcrStitcher
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey

@@ -2,8 +2,8 @@
 
 import uuid
 
-from src.graph.graph_models import URN, EdgeType, Graph, Node, NodeMetadata, NodeMetadataKey, NodeType
-from src.graph.stitchers.rds_to_database import RdsToDatabaseStitcher
+from labyrinth.graph.graph_models import URN, EdgeType, Graph, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.stitchers.rds_to_database import RdsToDatabaseStitcher
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey

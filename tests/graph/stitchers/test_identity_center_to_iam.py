@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import uuid
 
-from src.graph.edges.member_of_edge import MemberOfEdge
-from src.graph.edges.sso_assigned_to_edge import SsoAssignedToEdge
-from src.graph.graph_models import (
+from labyrinth.graph.edges.member_of_edge import MemberOfEdge
+from labyrinth.graph.edges.sso_assigned_to_edge import SsoAssignedToEdge
+from labyrinth.graph.graph_models import (
     URN,
     EdgeMetadataKey,
     EdgeType,
@@ -14,11 +14,11 @@ from src.graph.graph_models import (
     NodeMetadataKey,
     NodeType,
 )
-from src.graph.nodes.aws.permission_set_node import PermissionSetNode
-from src.graph.nodes.aws.sso_user_node import SsoUserNode
-from src.graph.nodes.iam_role_node import IamRoleNode
-from src.graph.nodes.sso_group_node import SsoGroupNode
-from src.graph.stitchers.identity_center_to_iam import IdentityCenterToIamStitcher
+from labyrinth.graph.nodes.aws.permission_set_node import PermissionSetNode
+from labyrinth.graph.nodes.aws.sso_user_node import SsoUserNode
+from labyrinth.graph.nodes.iam_role_node import IamRoleNode
+from labyrinth.graph.nodes.sso_group_node import SsoGroupNode
+from labyrinth.graph.stitchers.identity_center_to_iam import IdentityCenterToIamStitcher
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey

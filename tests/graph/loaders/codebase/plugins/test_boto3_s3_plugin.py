@@ -6,11 +6,11 @@ Verifies detection of S3 client creation and operation tagging.
 
 import uuid
 
-from src.graph.graph_models import (
+from labyrinth.graph.graph_models import (
     NodeMetadataKey,
 )
-from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
-from src.graph.loaders.codebase.plugins import Boto3S3Plugin
+from labyrinth.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
+from labyrinth.graph.loaders.codebase.plugins import Boto3S3Plugin
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 

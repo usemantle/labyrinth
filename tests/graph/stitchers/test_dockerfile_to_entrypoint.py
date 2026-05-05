@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import uuid
 
-from src.graph.edges.contains_edge import ContainsEdge
-from src.graph.graph_models import URN, Edge, EdgeType, Graph, Node, NodeMetadata, NodeMetadataKey, NodeType
-from src.graph.stitchers.dockerfile_to_entrypoint import DockerfileToEntrypointStitcher
+from labyrinth.graph.edges.contains_edge import ContainsEdge
+from labyrinth.graph.graph_models import URN, Edge, EdgeType, Graph, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.stitchers.dockerfile_to_entrypoint import DockerfileToEntrypointStitcher
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey
