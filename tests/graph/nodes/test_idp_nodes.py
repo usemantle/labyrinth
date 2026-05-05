@@ -6,18 +6,18 @@ import uuid
 
 import pytest
 
-from src.graph.edges.member_of_edge import MemberOfEdge
-from src.graph.edges.okta_edges import (
+from labyrinth.graph.edges.member_of_edge import MemberOfEdge
+from labyrinth.graph.edges.okta_edges import (
     OktaAssignedToEdge,
     OktaMapsToEdge,
     OktaPartOfEdge,
     OktaPushesToEdge,
 )
-from src.graph.graph_models import URN, Node, NodeMetadataKey
-from src.graph.nodes.aws.sso_user_node import SsoUserNode
-from src.graph.nodes.okta.application_node import ApplicationNode
-from src.graph.nodes.okta.group_node import GroupNode
-from src.graph.nodes.okta.person_node import PersonNode
+from labyrinth.graph.graph_models import URN, Node, NodeMetadataKey
+from labyrinth.graph.nodes.aws.sso_user_node import SsoUserNode
+from labyrinth.graph.nodes.okta.application_node import ApplicationNode
+from labyrinth.graph.nodes.okta.group_node import GroupNode
+from labyrinth.graph.nodes.okta.person_node import PersonNode
 
 NK = NodeMetadataKey
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")

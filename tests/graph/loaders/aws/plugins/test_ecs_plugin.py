@@ -5,8 +5,8 @@ from __future__ import annotations
 import uuid
 from unittest.mock import MagicMock, call
 
-from src.graph.graph_models import URN, NodeMetadataKey
-from src.graph.loaders.aws.plugins.ecs_plugin import EcsResourcePlugin
+from labyrinth.graph.graph_models import URN, NodeMetadataKey
+from labyrinth.graph.loaders.aws.plugins.ecs_plugin import EcsResourcePlugin
 
 ORG_ID = uuid.uuid4()
 NK = NodeMetadataKey

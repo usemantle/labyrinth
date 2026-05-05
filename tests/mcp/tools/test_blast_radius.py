@@ -7,8 +7,8 @@ import uuid
 import pytest
 from mcp.server.fastmcp import FastMCP
 
-from src.mcp.graph_store import GraphStore
-from src.mcp.tools.security import register
+from labyrinth.mcp.graph_store import GraphStore
+from labyrinth.mcp.tools.security import register
 
 ORG_ID = str(uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"))
 

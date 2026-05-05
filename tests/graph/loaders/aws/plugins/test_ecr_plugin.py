@@ -6,8 +6,8 @@ import json
 import uuid
 from unittest.mock import MagicMock
 
-from src.graph.graph_models import URN, NodeMetadataKey
-from src.graph.loaders.aws.plugins.ecr_plugin import EcrResourcePlugin
+from labyrinth.graph.graph_models import URN, NodeMetadataKey
+from labyrinth.graph.loaders.aws.plugins.ecr_plugin import EcrResourcePlugin
 
 ORG_ID = uuid.uuid4()
 NK = NodeMetadataKey

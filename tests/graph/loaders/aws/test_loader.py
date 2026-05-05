@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.graph.graph_models import URN, NodeMetadataKey
-from src.graph.loaders.aws.loader import AwsAccountLoader
-from src.graph.loaders.aws.plugins._base import AwsResourcePlugin
+from labyrinth.graph.graph_models import URN, NodeMetadataKey
+from labyrinth.graph.loaders.aws.loader import AwsAccountLoader
+from labyrinth.graph.loaders.aws.plugins._base import AwsResourcePlugin
 
 ORG_ID = uuid.uuid4()
 NK = NodeMetadataKey
@@ -22,7 +22,7 @@ class _DummyPlugin(AwsResourcePlugin):
         return "dummy"
 
     def discover(self, session, account_id, region, organization_id, account_urn, build_urn):
-        from src.graph.nodes.bucket_node import BucketNode
+        from labyrinth.graph.nodes.bucket_node import BucketNode
         urn = URN(f"urn:aws:s3:{account_id}:{region}:test-bucket")
         node = BucketNode.create(
             organization_id=organization_id,
@@ -38,7 +38,7 @@ class TestAwsAccountLoaderBasics:
         assert AwsAccountLoader.display_name() == "AWS Account"
 
     def test_credential_type(self):
-        from src.graph.credentials import AWSProfileCredential
+        from labyrinth.graph.credentials import AWSProfileCredential
         assert AwsAccountLoader.credential_type() is AWSProfileCredential
 
     def test_build_target_urn(self):
@@ -131,7 +131,7 @@ class TestAwsAccountLoaderLoad:
 
 
 class TestAwsAccountLoaderFromConfig:
-    @patch("src.graph.loaders.aws.boto3")
+    @patch("labyrinth.graph.loaders.aws.boto3")
     def test_from_target_config_with_profile(self, mock_boto3):
         mock_session = MagicMock()
         mock_boto3.Session.return_value = mock_session
@@ -152,7 +152,7 @@ class TestAwsAccountLoaderFromConfig:
             profile_name="prod", region_name="us-east-1",
         )
 
-    @patch("src.graph.loaders.aws.boto3")
+    @patch("labyrinth.graph.loaders.aws.boto3")
     def test_from_target_config_with_temp_credentials(self, mock_boto3):
         mock_session = MagicMock()
         mock_boto3.Session.return_value = mock_session

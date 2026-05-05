@@ -8,12 +8,12 @@ CODE_TO_CODE edges from functions to ORM classes.
 
 import uuid
 
-from src.graph.graph_models import (
+from labyrinth.graph.graph_models import (
     EdgeMetadataKey,
     NodeMetadataKey,
 )
-from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
-from src.graph.loaders.codebase.plugins import SQLAlchemyPlugin
+from labyrinth.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
+from labyrinth.graph.loaders.codebase.plugins import SQLAlchemyPlugin
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 

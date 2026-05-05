@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from src.graph.graph_models import NodeMetadataKey
-from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
-from src.graph.loaders.codebase.plugins.fastapi_plugin import FastAPIPlugin
+from labyrinth.graph.graph_models import NodeMetadataKey
+from labyrinth.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
+from labyrinth.graph.loaders.codebase.plugins.fastapi_plugin import FastAPIPlugin
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 

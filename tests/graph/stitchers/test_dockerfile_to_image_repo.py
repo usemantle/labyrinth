@@ -2,17 +2,17 @@
 
 import uuid
 
-from src.graph.graph_models import (
+from labyrinth.graph.graph_models import (
     URN,
     EdgeMetadataKey,
     Graph,
     NodeMetadataKey,
 )
-from src.graph.nodes.codebase_node import CodebaseNode
-from src.graph.nodes.file_node import FileNode
-from src.graph.nodes.image_node import ImageNode
-from src.graph.nodes.image_repository_node import ImageRepositoryNode
-from src.graph.stitchers.dockerfile_to_image_repo import DockerfileToImageRepoStitcher
+from labyrinth.graph.nodes.codebase_node import CodebaseNode
+from labyrinth.graph.nodes.file_node import FileNode
+from labyrinth.graph.nodes.image_node import ImageNode
+from labyrinth.graph.nodes.image_repository_node import ImageRepositoryNode
+from labyrinth.graph.stitchers.dockerfile_to_image_repo import DockerfileToImageRepoStitcher
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey

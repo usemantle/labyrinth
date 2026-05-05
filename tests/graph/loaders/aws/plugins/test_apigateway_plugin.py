@@ -5,8 +5,8 @@ from __future__ import annotations
 import uuid
 from unittest.mock import MagicMock
 
-from src.graph.graph_models import URN, NodeMetadataKey
-from src.graph.loaders.aws.plugins.apigateway_plugin import ApiGatewayResourcePlugin
+from labyrinth.graph.graph_models import URN, NodeMetadataKey
+from labyrinth.graph.loaders.aws.plugins.apigateway_plugin import ApiGatewayResourcePlugin
 
 ORG_ID = uuid.uuid4()
 NK = NodeMetadataKey

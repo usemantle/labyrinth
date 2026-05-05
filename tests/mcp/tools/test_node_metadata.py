@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import tempfile
 
-from src.mcp.graph_store import GraphStore
+from labyrinth.mcp.graph_store import GraphStore
 
 
 def _make_store(nodes: list[dict], edges: list[dict] | None = None) -> GraphStore:

@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import tempfile
 
-from src.agent.candidates import Candidate, candidate_id
-from src.agent.prompts import build_investigation_prompt, build_system_prompt
-from src.mcp.graph_store import GraphStore
+from labyrinth.agent.candidates import Candidate, candidate_id
+from labyrinth.agent.prompts import build_investigation_prompt, build_system_prompt
+from labyrinth.mcp.graph_store import GraphStore
 
 
 def _make_store(nodes: list[dict], edges: list[dict] | None = None) -> GraphStore:

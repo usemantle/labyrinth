@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from src.graph.edges import (
+from labyrinth.graph.edges import (
     CallsEdge,
     ContainsEdge,
     DependsOnEdge,
@@ -16,7 +16,7 @@ from src.graph.edges import (
     SoftReferenceEdge,
     WritesEdge,
 )
-from src.graph.graph_models import URN, Edge, EdgeMetadata, EdgeMetadataKey
+from labyrinth.graph.graph_models import URN, Edge, EdgeMetadata, EdgeMetadataKey
 
 ORG_ID = uuid.uuid4()
 FROM_URN = URN("urn:test:test:::from")

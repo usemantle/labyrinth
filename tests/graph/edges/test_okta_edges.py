@@ -6,13 +6,13 @@ import uuid
 
 import pytest
 
-from src.graph.edges.okta_edges import (
+from labyrinth.graph.edges.okta_edges import (
     OktaAssignedToEdge,
     OktaMapsToEdge,
     OktaPartOfEdge,
     OktaPushesToEdge,
 )
-from src.graph.graph_models import URN, Edge, EdgeMetadata, EdgeMetadataKey
+from labyrinth.graph.graph_models import URN, Edge, EdgeMetadata, EdgeMetadataKey
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 FROM_URN = URN("urn:test:test:::from")

@@ -17,9 +17,9 @@ from pathlib import Path
 
 import pytest
 
-from src.graph.graph_models import NodeMetadataKey
-from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
-from src.graph.loaders.codebase.plugins.fastapi_plugin import FastAPIPlugin
+from labyrinth.graph.graph_models import NodeMetadataKey
+from labyrinth.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
+from labyrinth.graph.loaders.codebase.plugins.fastapi_plugin import FastAPIPlugin
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 
@@ -274,11 +274,11 @@ def test_same_file_class_instantiation(tmp_path):
 def test_link_dependencies_creates_depends_on_edges(tmp_path):
     """PythonAnalyzer.link_dependencies() should create DependsOn edges
     from files to dependency nodes based on imports."""
-    from src.graph.graph_models import URN
-    from src.graph.loaders.codebase.codebase_loader import PostProcessContext
-    from src.graph.loaders.codebase.resolvers.python import PythonAnalyzer
-    from src.graph.nodes.dependency_node import DependencyNode
-    from src.graph.nodes.file_node import FileNode
+    from labyrinth.graph.graph_models import URN
+    from labyrinth.graph.loaders.codebase.codebase_loader import PostProcessContext
+    from labyrinth.graph.loaders.codebase.resolvers.python import PythonAnalyzer
+    from labyrinth.graph.nodes.dependency_node import DependencyNode
+    from labyrinth.graph.nodes.file_node import FileNode
 
     root = tmp_path / "myapp"
     root.mkdir()

@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from src.graph.graph_models import URN, Edge, Node, NodeMetadata
-from src.graph.sinks.json_file_sink import JsonFileSink
+from labyrinth.graph.graph_models import URN, Edge, Node, NodeMetadata
+from labyrinth.graph.sinks.json_file_sink import JsonFileSink
 
 
 @pytest.fixture

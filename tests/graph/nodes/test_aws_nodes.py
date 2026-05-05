@@ -6,19 +6,19 @@ import uuid
 
 import pytest
 
-from src.graph.graph_models import URN, NodeMetadataKey
-from src.graph.nodes.aws_account_node import AwsAccountNode
-from src.graph.nodes.ecs_cluster_node import EcsClusterNode
-from src.graph.nodes.ecs_service_node import EcsServiceNode
-from src.graph.nodes.ecs_task_definition_node import EcsTaskDefinitionNode
-from src.graph.nodes.iam_policy_node import IamPolicyNode
-from src.graph.nodes.iam_role_node import IamRoleNode
-from src.graph.nodes.iam_user_node import IamUserNode
-from src.graph.nodes.nacl_node import NaclNode
-from src.graph.nodes.rds_cluster_node import RdsClusterNode
-from src.graph.nodes.security_group_node import SecurityGroupNode
-from src.graph.nodes.sso_group_node import SsoGroupNode
-from src.graph.nodes.vpc_node import VpcNode
+from labyrinth.graph.graph_models import URN, NodeMetadataKey
+from labyrinth.graph.nodes.aws_account_node import AwsAccountNode
+from labyrinth.graph.nodes.ecs_cluster_node import EcsClusterNode
+from labyrinth.graph.nodes.ecs_service_node import EcsServiceNode
+from labyrinth.graph.nodes.ecs_task_definition_node import EcsTaskDefinitionNode
+from labyrinth.graph.nodes.iam_policy_node import IamPolicyNode
+from labyrinth.graph.nodes.iam_role_node import IamRoleNode
+from labyrinth.graph.nodes.iam_user_node import IamUserNode
+from labyrinth.graph.nodes.nacl_node import NaclNode
+from labyrinth.graph.nodes.rds_cluster_node import RdsClusterNode
+from labyrinth.graph.nodes.security_group_node import SecurityGroupNode
+from labyrinth.graph.nodes.sso_group_node import SsoGroupNode
+from labyrinth.graph.nodes.vpc_node import VpcNode
 
 NK = NodeMetadataKey
 ORG_ID = uuid.uuid4()

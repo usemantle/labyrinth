@@ -2,7 +2,7 @@
 
 import uuid
 
-from src.graph.graph_models import (
+from labyrinth.graph.graph_models import (
     URN,
     EdgeMetadataKey,
     Graph,
@@ -10,9 +10,9 @@ from src.graph.graph_models import (
     NodeMetadata,
     NodeMetadataKey,
 )
-from src.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
-from src.graph.loaders.codebase.plugins import SQLAlchemyPlugin
-from src.graph.stitchers.orm_class_to_table import OrmClassToTableStitcher
+from labyrinth.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
+from labyrinth.graph.loaders.codebase.plugins import SQLAlchemyPlugin
+from labyrinth.graph.stitchers.orm_class_to_table import OrmClassToTableStitcher
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey
@@ -45,7 +45,7 @@ def _make_orm_repo(tmp_path):
 
 
 def _make_data_nodes():
-    from src.graph.edges.contains_edge import ContainsEdge
+    from labyrinth.graph.edges.contains_edge import ContainsEdge
 
     db_urn = URN("urn:onprem:postgres:localhost:5432:mydb")
     schema_urn = URN("urn:onprem:postgres:localhost:5432:mydb/public")

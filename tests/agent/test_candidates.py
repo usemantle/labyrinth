@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import tempfile
 
-from src.agent.candidates import Candidate, candidate_id, filter_already_evaluated
-from src.mcp.graph_store import GraphStore
+from labyrinth.agent.candidates import Candidate, candidate_id, filter_already_evaluated
+from labyrinth.mcp.graph_store import GraphStore
 
 
 def _make_candidate(source_urn: str, heuristic_name: str = "test") -> Candidate:

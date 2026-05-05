@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.graph.loaders.object_store.s3.matchers import (
+from labyrinth.graph.loaders.object_store.s3.matchers import (
     HexHashMatcher,
     HivePartitionMatcher,
     HiveTimePartitionMatcher,
@@ -13,8 +13,8 @@ from src.graph.loaders.object_store.s3.matchers import (
     UUIDMatcher,
     default_matchers,
 )
-from src.graph.loaders.object_store.s3.trie import PathTrie
-from src.graph.loaders.object_store.s3.wildcard import build_collapsed_trie
+from labyrinth.graph.loaders.object_store.s3.trie import PathTrie
+from labyrinth.graph.loaders.object_store.s3.wildcard import build_collapsed_trie
 
 # ── Segment matcher tests ─────────────────────────────────────────
 

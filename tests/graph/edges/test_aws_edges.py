@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import uuid
 
-from src.graph.graph_models import URN, EdgeMetadata, EdgeMetadataKey
-from src.graph.edges.assumes_edge import AssumesEdge
-from src.graph.edges.attaches_edge import AttachesEdge
-from src.graph.edges.protected_by_edge import ProtectedByEdge
-from src.graph.edges.allows_traffic_to_edge import AllowsTrafficToEdge
-from src.graph.edges.member_of_edge import MemberOfEdge
+from labyrinth.graph.graph_models import URN, EdgeMetadata, EdgeMetadataKey
+from labyrinth.graph.edges.assumes_edge import AssumesEdge
+from labyrinth.graph.edges.attaches_edge import AttachesEdge
+from labyrinth.graph.edges.protected_by_edge import ProtectedByEdge
+from labyrinth.graph.edges.allows_traffic_to_edge import AllowsTrafficToEdge
+from labyrinth.graph.edges.member_of_edge import MemberOfEdge
 
 ORG_ID = uuid.uuid4()
 EK = EdgeMetadataKey

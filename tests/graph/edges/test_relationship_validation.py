@@ -2,7 +2,7 @@
 
 import uuid
 
-from src.graph.edges import (
+from labyrinth.graph.edges import (
     CallsEdge,
     ContainsEdge,
     DependsOnEdge,
@@ -15,8 +15,8 @@ from src.graph.edges import (
     WritesEdge,
     validate_edge,
 )
-from src.graph.graph_models import URN, Node
-from src.graph.nodes import (
+from labyrinth.graph.graph_models import URN, Node
+from labyrinth.graph.nodes import (
     BucketNode,
     ClassNode,
     CodebaseNode,

@@ -2,9 +2,9 @@
 
 import uuid
 
-from src.graph.graph_models import URN, EdgeType, Graph, NodeMetadataKey
-from src.graph.nodes.load_balancer_node import LoadBalancerNode
-from src.graph.stitchers.apigw_to_alb import ApiGwToAlbStitcher
+from labyrinth.graph.graph_models import URN, EdgeType, Graph, NodeMetadataKey
+from labyrinth.graph.nodes.load_balancer_node import LoadBalancerNode
+from labyrinth.graph.stitchers.apigw_to_alb import ApiGwToAlbStitcher
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey

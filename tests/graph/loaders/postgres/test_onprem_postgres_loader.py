@@ -9,13 +9,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.drivers.sql.models import (
+from labyrinth.drivers.sql.models import (
     ColumnMetadata,
     ForeignKeyMetadata,
     SchemaMetadata,
     TableMetadata,
 )
-from src.graph.loaders.postgres.onprem_postgres_loader import OnPremPostgresLoader
+from labyrinth.graph.loaders.postgres.onprem_postgres_loader import OnPremPostgresLoader
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 RESOURCE = "postgresql://user:pass@db.internal:5432/mydb"
@@ -81,7 +81,7 @@ def _build_mock_driver():
 def loader_result():
     """Run the loader with a mocked driver, return (nodes, edges)."""
     with patch(
-        "src.graph.loaders.postgres.postgres_loader.BaseDiscoveryDriver.get_driver"
+        "labyrinth.graph.loaders.postgres.postgres_loader.BaseDiscoveryDriver.get_driver"
     ) as mock_get:
         mock_get.return_value = _build_mock_driver()
         loader = OnPremPostgresLoader(organization_id=ORG_ID, resource=RESOURCE)
@@ -234,7 +234,7 @@ def test_edge_uuids_deterministic(loader_result):
     _, edges1 = loader_result
 
     with patch(
-        "src.graph.loaders.postgres.postgres_loader.BaseDiscoveryDriver.get_driver"
+        "labyrinth.graph.loaders.postgres.postgres_loader.BaseDiscoveryDriver.get_driver"
     ) as mock_get:
         mock_get.return_value = _build_mock_driver()
         loader = OnPremPostgresLoader(organization_id=ORG_ID, resource=RESOURCE)
@@ -270,7 +270,7 @@ def test_empty_database():
     driver.discover_foreign_keys.return_value = []
 
     with patch(
-        "src.graph.loaders.postgres.postgres_loader.BaseDiscoveryDriver.get_driver"
+        "labyrinth.graph.loaders.postgres.postgres_loader.BaseDiscoveryDriver.get_driver"
     ) as mock_get:
         mock_get.return_value = driver
         loader = OnPremPostgresLoader(organization_id=ORG_ID, resource=RESOURCE)

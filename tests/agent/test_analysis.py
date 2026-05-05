@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-from src.agent.analysis import find_candidate, load_analysis, save_analysis, update_candidate_status
-from src.agent.candidates import Candidate, candidate_id
+from labyrinth.agent.analysis import find_candidate, load_analysis, save_analysis, update_candidate_status
+from labyrinth.agent.candidates import Candidate, candidate_id
 
 
 def _make_candidate(source_urn: str, heuristic_name: str = "test") -> Candidate:
