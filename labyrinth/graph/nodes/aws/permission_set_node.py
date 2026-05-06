@@ -10,12 +10,13 @@ from labyrinth.graph.edges.assumes_edge import AssumesEdge
 from labyrinth.graph.edges.contains_edge import ContainsEdge
 from labyrinth.graph.edges.sso_assigned_to_edge import SsoAssignedToEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class PermissionSetNode(Node):
+class PermissionSetNode(AwsResourceMixin, Node):
     """An AWS IAM Identity Center permission set.
 
     A permission set defines a named bundle of policies that can be provisioned
@@ -35,9 +36,11 @@ class PermissionSetNode(Node):
         SsoAssignedToEdge,
     })
 
-    @staticmethod
-    def build_urn(account_id: str, permission_set_id: str) -> URN:
-        return URN(f"urn:aws:sso:{account_id}::permission-set/{permission_set_id}")
+    @classmethod
+    def build_urn(cls, account_id: str, permission_set_id: str) -> URN:
+        return cls.urn_from_arn(
+            f"arn:aws:sso::{account_id}:permission-set/{permission_set_id}",
+        )
 
     @classmethod
     def create(

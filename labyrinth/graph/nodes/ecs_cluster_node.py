@@ -8,12 +8,13 @@ from typing import ClassVar
 
 from labyrinth.graph.edges.contains_edge import ContainsEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class EcsClusterNode(Node):
+class EcsClusterNode(AwsResourceMixin, Node):
     """An AWS ECS cluster."""
 
     node_type: str = NodeType.ECS_CLUSTER
@@ -25,9 +26,11 @@ class EcsClusterNode(Node):
         ContainsEdge,
     })
 
-    @staticmethod
-    def build_urn(account_id: str, region: str, cluster_name: str) -> URN:
-        return URN(f"urn:aws:ecs:{account_id}:{region}:{cluster_name}")
+    @classmethod
+    def build_urn(cls, account_id: str, region: str, cluster_name: str) -> URN:
+        return cls.urn_from_arn(
+            f"arn:aws:ecs:{region}:{account_id}:cluster/{cluster_name}",
+        )
 
     @classmethod
     def create(

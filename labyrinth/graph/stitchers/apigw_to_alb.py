@@ -1,4 +1,4 @@
-"""Stitcher: API Gateway LOAD_BALANCER nodes -> ALB LOAD_BALANCER nodes via RoutesToEdge."""
+"""Stitcher: API_GATEWAY nodes -> LOAD_BALANCER (ALB) nodes via RoutesToEdge."""
 
 from __future__ import annotations
 
@@ -24,15 +24,12 @@ class ApiGwToAlbStitcher(Stitcher):
         NK = NodeMetadataKey
         result = Graph()
 
-        idx = self.index_nodes(graph, types={NodeType.LOAD_BALANCER})
+        idx = self.index_nodes(graph, types={NodeType.LOAD_BALANCER, NodeType.API_GATEWAY})
 
-        api_gw_nodes: list[Node] = []
+        api_gw_nodes: list[Node] = list(idx.nodes_of_type(NodeType.API_GATEWAY))
         lb_by_listener_arn: dict[str, URN] = {}
 
         for node in idx.nodes_of_type(NodeType.LOAD_BALANCER):
-            if node.metadata.get(NK.API_GW_INTEGRATION_URIS):
-                api_gw_nodes.append(node)
-
             listeners = node.metadata.get(NK.LB_LISTENERS, [])
             lb_arn = node.metadata.get(NK.ARN, "")
             if isinstance(listeners, list) and lb_arn:

@@ -15,7 +15,7 @@ from labyrinth.graph.nodes.iam_policy_node import IamPolicyNode
 from labyrinth.graph.nodes.iam_role_node import IamRoleNode
 from labyrinth.graph.nodes.iam_user_node import IamUserNode
 from labyrinth.graph.nodes.nacl_node import NaclNode
-from labyrinth.graph.nodes.rds_cluster_node import RdsClusterNode
+from labyrinth.graph.nodes.rds_instance_node import RdsInstanceNode
 from labyrinth.graph.nodes.security_group_node import SecurityGroupNode
 from labyrinth.graph.nodes.sso_group_node import SsoGroupNode
 from labyrinth.graph.nodes.vpc_node import VpcNode
@@ -36,20 +36,21 @@ class TestAwsAccountNode:
         assert node.metadata[NK.REGION] == "us-east-1"
 
 
-class TestRdsClusterNode:
+class TestRdsInstanceNode:
     def test_create_minimal(self):
-        urn = URN("urn:aws:rds:123456789012:us-east-1:my-db")
-        node = RdsClusterNode.create(
-            organization_id=ORG_ID, urn=urn, cluster_id="my-db",
+        urn = RdsInstanceNode.build_urn("123456789012", "us-east-1", "my-db")
+        node = RdsInstanceNode.create(
+            organization_id=ORG_ID, urn=urn, instance_id="my-db",
         )
-        assert node.node_type == "rds_cluster"
-        assert node.metadata[NK.RDS_CLUSTER_ID] == "my-db"
+        assert node.node_type == "rds_instance"
+        assert node.metadata[NK.RDS_INSTANCE_ID] == "my-db"
+        assert str(urn) == "urn:arn:aws:rds:us-east-1:123456789012:db:my-db"
 
     def test_create_full(self):
-        urn = URN("urn:aws:rds:123456789012:us-east-1:my-db")
-        node = RdsClusterNode.create(
+        urn = RdsInstanceNode.build_urn("123456789012", "us-east-1", "my-db")
+        node = RdsInstanceNode.create(
             organization_id=ORG_ID, urn=urn,
-            cluster_id="my-db", engine="postgres",
+            instance_id="my-db", engine="postgres",
             endpoint="my-db.abc.us-east-1.rds.amazonaws.com",
             port=5432, publicly_accessible=True,
             encryption_enabled=False, multi_az=True,

@@ -53,7 +53,7 @@ class TestRdsResourcePlugin:
         )
 
         assert len(nodes) == 1
-        assert nodes[0].node_type == "rds_cluster"
+        assert nodes[0].node_type == "rds_instance"
         assert nodes[0].metadata[NK.RDS_ENGINE] == "postgres"
         assert nodes[0].metadata[NK.RDS_PUBLICLY_ACCESSIBLE] is False
         assert nodes[0].metadata[NK.RDS_ENCRYPTION_ENABLED] is True

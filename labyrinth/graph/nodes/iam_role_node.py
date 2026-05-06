@@ -9,12 +9,13 @@ from typing import ClassVar
 from labyrinth.graph.edges.assumes_edge import AssumesEdge
 from labyrinth.graph.edges.attaches_edge import AttachesEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class IamRoleNode(Node):
+class IamRoleNode(AwsResourceMixin, Node):
     """An AWS IAM role."""
 
     node_type: str = NodeType.IAM_ROLE
@@ -25,9 +26,9 @@ class IamRoleNode(Node):
         AttachesEdge,
     })
 
-    @staticmethod
-    def build_urn(account_id: str, role_name: str) -> URN:
-        return URN(f"urn:aws:iam:{account_id}::role/{role_name}")
+    @classmethod
+    def build_urn(cls, account_id: str, role_name: str) -> URN:
+        return cls.urn_from_arn(f"arn:aws:iam::{account_id}:role/{role_name}")
 
     @classmethod
     def create(

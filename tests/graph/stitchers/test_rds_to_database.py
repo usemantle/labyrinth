@@ -14,7 +14,7 @@ def test_rds_to_database_endpoint_match():
     rds_node = Node(
         organization_id=ORG_ID,
         urn=URN("urn:aws:rds:123:us-east-1:mydb"),
-        node_type=NodeType.RDS_CLUSTER,
+        node_type=NodeType.RDS_INSTANCE,
         metadata=NodeMetadata({NK.RDS_ENDPOINT: endpoint}),
     )
     db_node = Node(
@@ -36,7 +36,7 @@ def test_rds_no_match():
     rds_node = Node(
         organization_id=ORG_ID,
         urn=URN("urn:aws:rds:123:us-east-1:mydb"),
-        node_type=NodeType.RDS_CLUSTER,
+        node_type=NodeType.RDS_INSTANCE,
         metadata=NodeMetadata({NK.RDS_ENDPOINT: "other.endpoint.com"}),
     )
     db_node = Node(

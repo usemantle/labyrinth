@@ -1,4 +1,4 @@
-"""RdsClusterNode — an RDS cluster or instance."""
+"""RdsInstanceNode — an AWS RDS DB instance."""
 
 from __future__ import annotations
 
@@ -10,15 +10,16 @@ from labyrinth.graph.edges.contains_edge import ContainsEdge
 from labyrinth.graph.edges.hosts_edge import HostsEdge
 from labyrinth.graph.edges.protected_by_edge import ProtectedByEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class RdsClusterNode(Node):
-    """An AWS RDS cluster or standalone instance."""
+class RdsInstanceNode(AwsResourceMixin, Node):
+    """An AWS RDS DB instance."""
 
-    node_type: str = NodeType.RDS_CLUSTER
+    node_type: str = NodeType.RDS_INSTANCE
 
     _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
         HostsEdge,
@@ -28,9 +29,11 @@ class RdsClusterNode(Node):
         ContainsEdge,
     })
 
-    @staticmethod
-    def build_urn(account_id: str, region: str, cluster_id: str) -> URN:
-        return URN(f"urn:aws:rds:{account_id}:{region}:{cluster_id}")
+    @classmethod
+    def build_urn(cls, account_id: str, region: str, instance_id: str) -> URN:
+        return cls.urn_from_arn(
+            f"arn:aws:rds:{region}:{account_id}:db:{instance_id}",
+        )
 
     @classmethod
     def create(
@@ -39,7 +42,7 @@ class RdsClusterNode(Node):
         urn: URN,
         parent_urn: URN | None = None,
         *,
-        cluster_id: str,
+        instance_id: str,
         engine: str | None = None,
         endpoint: str | None = None,
         port: int | None = None,
@@ -47,8 +50,8 @@ class RdsClusterNode(Node):
         encryption_enabled: bool | None = None,
         multi_az: bool | None = None,
         arn: str | None = None,
-    ) -> RdsClusterNode:
-        meta = NodeMetadata({NK.RDS_CLUSTER_ID: cluster_id})
+    ) -> RdsInstanceNode:
+        meta = NodeMetadata({NK.RDS_INSTANCE_ID: instance_id})
         if engine is not None:
             meta[NK.RDS_ENGINE] = engine
         if endpoint is not None:

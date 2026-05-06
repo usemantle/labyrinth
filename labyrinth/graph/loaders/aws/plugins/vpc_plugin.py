@@ -93,7 +93,7 @@ class VpcResourcePlugin(AwsResourcePlugin):
             for sg in page.get("SecurityGroups", []):
                 sg_id = sg["GroupId"]
                 vpc_id = sg.get("VpcId", "unknown")
-                sg_urn = SecurityGroupNode.build_urn(account_id, region, vpc_id, sg_id)
+                sg_urn = SecurityGroupNode.build_urn(account_id, region, sg_id)
                 vpc_urn = VpcNode.build_urn(account_id, region, vpc_id)
 
                 # Parse rules into structured format
@@ -118,9 +118,8 @@ class VpcResourcePlugin(AwsResourcePlugin):
                     for sg_ref in rule.get("UserIdGroupPairs", []):
                         ref_sg_id = sg_ref.get("GroupId")
                         if ref_sg_id:
-                            ref_vpc_id = sg_ref.get("VpcId", vpc_id)
                             ref_sg_urn = SecurityGroupNode.build_urn(
-                                account_id, region, ref_vpc_id, ref_sg_id,
+                                account_id, region, ref_sg_id,
                             )
                             port_range = self._format_port_range(rule)
                             edges.append(AllowsTrafficToEdge.create(
@@ -148,7 +147,7 @@ class VpcResourcePlugin(AwsResourcePlugin):
             for nacl in page.get("NetworkAcls", []):
                 nacl_id = nacl["NetworkAclId"]
                 vpc_id = nacl.get("VpcId", "unknown")
-                nacl_urn = NaclNode.build_urn(account_id, region, vpc_id, nacl_id)
+                nacl_urn = NaclNode.build_urn(account_id, region, nacl_id)
                 vpc_urn = VpcNode.build_urn(account_id, region, vpc_id)
 
                 rules = [
