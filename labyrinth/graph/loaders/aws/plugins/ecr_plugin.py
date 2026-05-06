@@ -55,7 +55,7 @@ class EcrResourcePlugin(AwsResourcePlugin):
                     repo_uri = repo.get("repositoryUri", "")
                     repo_arn = repo.get("repositoryArn", "")
 
-                    ecr_urn = URN(f"urn:aws:ecr:{account_id}:{region}:{repo_name}")
+                    ecr_urn = ImageRepositoryNode.build_urn(account_id, region, repo_name)
 
                     node = ImageRepositoryNode.create(
                         organization_id=organization_id,
@@ -106,9 +106,7 @@ class EcrResourcePlugin(AwsResourcePlugin):
         for img in images:
             digest = img["imageDigest"]
             tags = ",".join(sorted(img.get("imageTags", [])))
-            image_urn = URN(
-                f"urn:aws:ecr:{account_id}:{region}:{repo_name}/{digest}"
-            )
+            image_urn = ImageNode.build_urn(account_id, region, repo_name, digest)
 
             labels = oci_labels.get(digest, {})
             image_node = ImageNode.create(

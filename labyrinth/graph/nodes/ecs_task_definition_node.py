@@ -27,6 +27,17 @@ class EcsTaskDefinitionNode(Node):
         ReferencesEdge,
     })
 
+    @staticmethod
+    def build_urn(
+        account_id: str,
+        region: str,
+        family: str,
+        revision: int,
+    ) -> URN:
+        return URN(
+            f"urn:aws:ecs:{account_id}:{region}:taskdef/{family}:{revision}",
+        )
+
     @classmethod
     def create(
         cls,

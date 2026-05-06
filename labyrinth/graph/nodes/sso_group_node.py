@@ -31,6 +31,10 @@ class SsoGroupNode(Node):
         MemberOfEdge,
     })
 
+    @staticmethod
+    def build_urn(account_id: str, group_id: str) -> URN:
+        return URN(f"urn:aws:sso:{account_id}::group/{group_id}")
+
     @classmethod
     def create(
         cls,

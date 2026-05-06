@@ -30,6 +30,14 @@ class LoadBalancerNode(Node):
         ContainsEdge,
     })
 
+    @staticmethod
+    def build_elb_urn(account_id: str, region: str, lb_name: str) -> URN:
+        return URN(f"urn:aws:elb:{account_id}:{region}:{lb_name}")
+
+    @staticmethod
+    def build_apigateway_urn(account_id: str, region: str, api_id: str) -> URN:
+        return URN(f"urn:aws:apigateway:{account_id}:{region}:{api_id}")
+
     @classmethod
     def create(
         cls,

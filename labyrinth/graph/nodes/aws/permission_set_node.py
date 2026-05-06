@@ -35,6 +35,10 @@ class PermissionSetNode(Node):
         SsoAssignedToEdge,
     })
 
+    @staticmethod
+    def build_urn(account_id: str, permission_set_id: str) -> URN:
+        return URN(f"urn:aws:sso:{account_id}::permission-set/{permission_set_id}")
+
     @classmethod
     def create(
         cls,

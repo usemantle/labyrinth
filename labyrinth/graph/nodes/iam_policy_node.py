@@ -23,6 +23,16 @@ class IamPolicyNode(Node):
     })
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset()
 
+    @staticmethod
+    def build_urn(
+        account_id: str,
+        policy_name: str,
+        *,
+        aws_managed: bool = False,
+    ) -> URN:
+        prefix = "policy/aws" if aws_managed else "policy"
+        return URN(f"urn:aws:iam:{account_id}::{prefix}/{policy_name}")
+
     @classmethod
     def create(
         cls,

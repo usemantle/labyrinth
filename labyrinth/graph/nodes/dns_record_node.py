@@ -26,6 +26,17 @@ class DnsRecordNode(Node):
         ContainsEdge,
     })
 
+    @staticmethod
+    def build_urn(
+        account_id: str,
+        zone_id: str,
+        record_name: str,
+        record_type: str,
+    ) -> URN:
+        return URN(
+            f"urn:aws:route53:{account_id}::{zone_id}/{record_name}/{record_type}",
+        )
+
     @classmethod
     def create(
         cls,

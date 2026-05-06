@@ -12,6 +12,7 @@ from labyrinth.graph.edges.protected_by_edge import ProtectedByEdge
 from labyrinth.graph.graph_models import URN, Edge, Node
 from labyrinth.graph.loaders.aws.plugins._base import AwsResourcePlugin
 from labyrinth.graph.nodes.rds_cluster_node import RdsClusterNode
+from labyrinth.graph.nodes.security_group_node import SecurityGroupNode
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ class RdsResourcePlugin(AwsResourcePlugin):
         endpoint = endpoint_info.get("Address")
         port = endpoint_info.get("Port")
 
-        rds_urn = URN(f"urn:aws:rds:{account_id}:{region}:{db_id}")
+        rds_urn = RdsClusterNode.build_urn(account_id, region, db_id)
 
         node = RdsClusterNode.create(
             organization_id=organization_id,
@@ -86,7 +87,7 @@ class RdsResourcePlugin(AwsResourcePlugin):
             sg_id = sg.get("VpcSecurityGroupId")
             if sg_id:
                 vpc_id = instance.get("DBSubnetGroup", {}).get("VpcId", "unknown")
-                sg_urn = URN(f"urn:aws:vpc:{account_id}:{region}:{vpc_id}/sg/{sg_id}")
+                sg_urn = SecurityGroupNode.build_urn(account_id, region, vpc_id, sg_id)
                 edges.append(ProtectedByEdge.create(
                     organization_id, rds_urn, sg_urn,
                 ))

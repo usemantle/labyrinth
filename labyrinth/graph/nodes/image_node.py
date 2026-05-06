@@ -23,6 +23,17 @@ class ImageNode(Node):
         ContainsEdge,
     })
 
+    @staticmethod
+    def build_urn(
+        account_id: str,
+        region: str,
+        repository_name: str,
+        image_digest: str,
+    ) -> URN:
+        return URN(
+            f"urn:aws:ecr:{account_id}:{region}:{repository_name}/{image_digest}",
+        )
+
     @classmethod
     def create(
         cls,

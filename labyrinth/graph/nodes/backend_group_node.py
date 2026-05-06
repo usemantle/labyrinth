@@ -27,6 +27,17 @@ class BackendGroupNode(Node):
         ContainsEdge,
     })
 
+    @staticmethod
+    def build_urn(
+        account_id: str,
+        region: str,
+        lb_name: str,
+        bg_name: str,
+    ) -> URN:
+        return URN(
+            f"urn:aws:elb:{account_id}:{region}:{lb_name}/bg/{bg_name}",
+        )
+
     @classmethod
     def create(
         cls,

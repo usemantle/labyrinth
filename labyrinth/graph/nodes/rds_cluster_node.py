@@ -28,6 +28,10 @@ class RdsClusterNode(Node):
         ContainsEdge,
     })
 
+    @staticmethod
+    def build_urn(account_id: str, region: str, cluster_id: str) -> URN:
+        return URN(f"urn:aws:rds:{account_id}:{region}:{cluster_id}")
+
     @classmethod
     def create(
         cls,

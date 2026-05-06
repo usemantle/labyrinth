@@ -28,6 +28,10 @@ class IamUserNode(Node):
         MemberOfEdge,
     })
 
+    @staticmethod
+    def build_urn(account_id: str, user_name: str) -> URN:
+        return URN(f"urn:aws:iam:{account_id}::user/{user_name}")
+
     @classmethod
     def create(
         cls,

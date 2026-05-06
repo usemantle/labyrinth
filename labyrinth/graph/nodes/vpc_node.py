@@ -25,6 +25,10 @@ class VpcNode(Node):
         ContainsEdge,
     })
 
+    @staticmethod
+    def build_urn(account_id: str, region: str, vpc_id: str) -> URN:
+        return URN(f"urn:aws:vpc:{account_id}:{region}:{vpc_id}")
+
     @classmethod
     def create(
         cls,

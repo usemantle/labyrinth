@@ -57,7 +57,7 @@ class SsoResourcePlugin(AwsResourcePlugin):
                 for group in page.get("Groups", []):
                     group_id = group["GroupId"]
                     group_name = group.get("DisplayName", group_id)
-                    group_urn = URN(f"urn:aws:sso:{account_id}::group/{group_id}")
+                    group_urn = SsoGroupNode.build_urn(account_id, group_id)
                     group_urns_by_id[group_id] = group_urn
                     nodes.append(SsoGroupNode.create(
                         organization_id=organization_id,
@@ -75,7 +75,7 @@ class SsoResourcePlugin(AwsResourcePlugin):
                     user_name = user.get("UserName", user_id)
                     primary_email = _primary_email(user.get("Emails", []))
                     external_id = _primary_external_id(user.get("ExternalIds", []))
-                    user_urn = URN(f"urn:aws:sso:{account_id}::user/{user_id}")
+                    user_urn = SsoUserNode.build_urn(account_id, user_id)
                     user_urns_by_id[user_id] = user_urn
                     nodes.append(SsoUserNode.create(
                         organization_id=organization_id,
@@ -128,7 +128,7 @@ class SsoResourcePlugin(AwsResourcePlugin):
                         continue
 
                     ps_id = ps_arn.rsplit("/", 1)[-1]
-                    ps_urn = URN(f"urn:aws:sso:{account_id}::permission-set/{ps_id}")
+                    ps_urn = PermissionSetNode.build_urn(account_id, ps_id)
                     ps_arn_to_urn[ps_arn] = ps_urn
                     nodes.append(PermissionSetNode.create(
                         organization_id=organization_id,

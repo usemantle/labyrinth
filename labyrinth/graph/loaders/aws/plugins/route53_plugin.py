@@ -68,8 +68,8 @@ class Route53ResourcePlugin(AwsResourcePlugin):
                 elif "AliasTarget" in record:
                     values = [record["AliasTarget"]["DNSName"].rstrip(".")]
 
-                urn = URN(
-                    f"urn:aws:route53:{account_id}::{zone_id}/{record_name}/{record_type}"
+                urn = DnsRecordNode.build_urn(
+                    account_id, zone_id, record_name, record_type,
                 )
 
                 node = DnsRecordNode.create(

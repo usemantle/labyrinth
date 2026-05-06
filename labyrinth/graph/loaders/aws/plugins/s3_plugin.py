@@ -55,7 +55,7 @@ class S3ResourcePlugin(AwsResourcePlugin):
             if bucket_region != region:
                 continue
 
-            bucket_urn = URN(f"urn:aws:s3:{account_id}:{region}:{bucket_name}")
+            bucket_urn = BucketNode.build_urn(account_id, region, bucket_name)
             arn = f"arn:aws:s3:::{bucket_name}"
 
             node = BucketNode.create(

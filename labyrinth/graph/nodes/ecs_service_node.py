@@ -32,6 +32,17 @@ class EcsServiceNode(Node):
         RoutesToEdge,
     })
 
+    @staticmethod
+    def build_urn(
+        account_id: str,
+        region: str,
+        cluster_name: str,
+        service_name: str,
+    ) -> URN:
+        return URN(
+            f"urn:aws:ecs:{account_id}:{region}:{cluster_name}/{service_name}",
+        )
+
     @classmethod
     def create(
         cls,

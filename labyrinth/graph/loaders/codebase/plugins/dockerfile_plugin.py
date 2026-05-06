@@ -160,7 +160,7 @@ class DockerfilePlugin(CodebasePlugin):
             # Find existing FileNode or create one
             file_node = file_nodes_by_path.get(rel_path)
             if file_node is None and codebase_urn is not None:
-                file_urn = context.build_urn(context.root_name, rel_path)
+                file_urn = FileNode.build_urn(codebase_urn, rel_path)
                 file_node = FileNode.create(
                     context.organization_id,
                     file_urn,

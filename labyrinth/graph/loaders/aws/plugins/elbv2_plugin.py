@@ -14,6 +14,7 @@ from labyrinth.graph.graph_models import URN, Edge, EdgeMetadata, EdgeMetadataKe
 from labyrinth.graph.loaders.aws.plugins._base import AwsResourcePlugin
 from labyrinth.graph.nodes.backend_group_node import BackendGroupNode
 from labyrinth.graph.nodes.load_balancer_node import LoadBalancerNode
+from labyrinth.graph.nodes.security_group_node import SecurityGroupNode
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ class Elbv2ResourcePlugin(AwsResourcePlugin):
             lb_arn = lb.get("LoadBalancerArn", "")
             lb_state = lb.get("State", {}).get("Code", "unknown")
 
-            lb_urn = URN(f"urn:aws:elb:{account_id}:{region}:{lb_name}")
+            lb_urn = LoadBalancerNode.build_elb_urn(account_id, region, lb_name)
 
             # Collect listeners
             listeners = self._describe_listeners(elbv2, lb_arn)
@@ -83,7 +84,9 @@ class Elbv2ResourcePlugin(AwsResourcePlugin):
 
             # Security groups
             for sg_id in lb.get("SecurityGroups", []):
-                sg_urn = URN(f"urn:aws:vpc:{account_id}:{region}:unknown/sg/{sg_id}")
+                sg_urn = SecurityGroupNode.build_urn(
+                    account_id, region, "unknown", sg_id,
+                )
                 edges.append(ProtectedByEdge.create(organization_id, lb_urn, sg_urn))
 
             # Target groups for this LB
@@ -151,7 +154,7 @@ class Elbv2ResourcePlugin(AwsResourcePlugin):
         for tg in target_groups:
             tg_name = tg["TargetGroupName"]
             tg_arn = tg.get("TargetGroupArn", "")
-            tg_urn = URN(f"urn:aws:elb:{account_id}:{region}:{lb_name}/bg/{tg_name}")
+            tg_urn = BackendGroupNode.build_urn(account_id, region, lb_name, tg_name)
 
             health_check = None
             if tg.get("HealthCheckEnabled"):

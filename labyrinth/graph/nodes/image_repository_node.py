@@ -26,6 +26,10 @@ class ImageRepositoryNode(Node):
         BuildsEdge,
     })
 
+    @staticmethod
+    def build_urn(account_id: str, region: str, repository_name: str) -> URN:
+        return URN(f"urn:aws:ecr:{account_id}:{region}:{repository_name}")
+
     @classmethod
     def create(
         cls,

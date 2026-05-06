@@ -49,7 +49,7 @@ class VpcResourcePlugin(AwsResourcePlugin):
 
         for vpc in vpcs:
             vpc_id = vpc["VpcId"]
-            vpc_urn = URN(f"urn:aws:vpc:{account_id}:{region}:{vpc_id}")
+            vpc_urn = VpcNode.build_urn(account_id, region, vpc_id)
 
             vpc_node = VpcNode.create(
                 organization_id=organization_id,
@@ -93,8 +93,8 @@ class VpcResourcePlugin(AwsResourcePlugin):
             for sg in page.get("SecurityGroups", []):
                 sg_id = sg["GroupId"]
                 vpc_id = sg.get("VpcId", "unknown")
-                sg_urn = URN(f"urn:aws:vpc:{account_id}:{region}:{vpc_id}/sg/{sg_id}")
-                vpc_urn = URN(f"urn:aws:vpc:{account_id}:{region}:{vpc_id}")
+                sg_urn = SecurityGroupNode.build_urn(account_id, region, vpc_id, sg_id)
+                vpc_urn = VpcNode.build_urn(account_id, region, vpc_id)
 
                 # Parse rules into structured format
                 ingress_rules = self._parse_rules(sg.get("IpPermissions", []))
@@ -119,8 +119,8 @@ class VpcResourcePlugin(AwsResourcePlugin):
                         ref_sg_id = sg_ref.get("GroupId")
                         if ref_sg_id:
                             ref_vpc_id = sg_ref.get("VpcId", vpc_id)
-                            ref_sg_urn = URN(
-                                f"urn:aws:vpc:{account_id}:{region}:{ref_vpc_id}/sg/{ref_sg_id}",
+                            ref_sg_urn = SecurityGroupNode.build_urn(
+                                account_id, region, ref_vpc_id, ref_sg_id,
                             )
                             port_range = self._format_port_range(rule)
                             edges.append(AllowsTrafficToEdge.create(
@@ -148,10 +148,8 @@ class VpcResourcePlugin(AwsResourcePlugin):
             for nacl in page.get("NetworkAcls", []):
                 nacl_id = nacl["NetworkAclId"]
                 vpc_id = nacl.get("VpcId", "unknown")
-                nacl_urn = URN(
-                    f"urn:aws:vpc:{account_id}:{region}:{vpc_id}/nacl/{nacl_id}",
-                )
-                vpc_urn = URN(f"urn:aws:vpc:{account_id}:{region}:{vpc_id}")
+                nacl_urn = NaclNode.build_urn(account_id, region, vpc_id, nacl_id)
+                vpc_urn = VpcNode.build_urn(account_id, region, vpc_id)
 
                 rules = [
                     {

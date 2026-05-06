@@ -32,6 +32,10 @@ class SsoUserNode(Node):
         OktaMapsToEdge,
     })
 
+    @staticmethod
+    def build_urn(account_id: str, user_id: str) -> URN:
+        return URN(f"urn:aws:sso:{account_id}::user/{user_id}")
+
     @classmethod
     def create(
         cls,

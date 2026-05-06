@@ -28,6 +28,7 @@ from labyrinth.graph.graph_models import (
 from labyrinth.graph.loaders.codebase.cve.osv_client import query_osv
 from labyrinth.graph.loaders.codebase.plugins._base import CodebasePlugin
 from labyrinth.graph.nodes.dependency_node import DependencyNode
+from labyrinth.graph.nodes.file_node import FileNode
 
 if TYPE_CHECKING:
     from labyrinth.graph.loaders.codebase.codebase_loader import PostProcessContext
@@ -76,7 +77,7 @@ class UvPlugin(CodebasePlugin):
         new_edges: list[Edge] = []
 
         # Create the package manifest node (represents uv.lock)
-        manifest_urn = context.build_urn(context.root_name, "uv.lock")
+        manifest_urn = FileNode.build_urn(codebase_urn, "uv.lock")
         manifest_node = Node(
             organization_id=context.organization_id,
             urn=manifest_urn,
@@ -101,7 +102,7 @@ class UvPlugin(CodebasePlugin):
             if not name or not version:
                 continue
 
-            dep_urn = context.build_urn(context.root_name, f"dep/{name}")
+            dep_urn = DependencyNode.build_urn(codebase_urn, name)
 
             dep_node = DependencyNode.create(
                 organization_id=context.organization_id,
@@ -130,7 +131,7 @@ class UvPlugin(CodebasePlugin):
         # Build transitive DEPENDS_ON edges between dependency nodes
         # Map package name → URN for quick lookup
         dep_urn_map = {
-            pkg.get("name", ""): context.build_urn(context.root_name, f"dep/{pkg.get('name', '')}")
+            pkg.get("name", ""): DependencyNode.build_urn(codebase_urn, pkg.get("name", ""))
             for pkg in packages
             if pkg.get("name") and pkg.get("version")
         }

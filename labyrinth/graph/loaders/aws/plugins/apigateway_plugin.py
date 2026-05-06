@@ -75,7 +75,7 @@ class ApiGatewayResourcePlugin(AwsResourcePlugin):
             # Determine scheme from endpoint type
             lb_scheme = "internet-facing"
 
-            urn = URN(f"urn:aws:apigateway:{account_id}:{region}:{api_id}")
+            urn = LoadBalancerNode.build_apigateway_urn(account_id, region, api_id)
 
             lb_type = "api_gateway_http" if protocol_type == "HTTP" else "api_gateway_websocket"
 
@@ -131,7 +131,7 @@ class ApiGatewayResourcePlugin(AwsResourcePlugin):
             # REST API DNS name follows a predictable pattern
             dns_name = f"{api_id}.execute-api.{region}.amazonaws.com"
 
-            urn = URN(f"urn:aws:apigateway:{account_id}:{region}:{api_id}")
+            urn = LoadBalancerNode.build_apigateway_urn(account_id, region, api_id)
 
             node = LoadBalancerNode.create(
                 organization_id=organization_id,

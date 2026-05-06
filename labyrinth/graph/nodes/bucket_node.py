@@ -23,6 +23,10 @@ class BucketNode(Node):
     })
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset()
 
+    @staticmethod
+    def build_urn(account_id: str, region: str, bucket_name: str) -> URN:
+        return URN(f"urn:aws:s3:{account_id}:{region}:{bucket_name}")
+
     @classmethod
     def create(
         cls,

@@ -25,6 +25,10 @@ class IamRoleNode(Node):
         AttachesEdge,
     })
 
+    @staticmethod
+    def build_urn(account_id: str, role_name: str) -> URN:
+        return URN(f"urn:aws:iam:{account_id}::role/{role_name}")
+
     @classmethod
     def create(
         cls,
