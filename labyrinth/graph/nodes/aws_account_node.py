@@ -1,0 +1,50 @@
+"""AwsAccountNode — an AWS account root container."""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+from typing import ClassVar
+
+from labyrinth.graph.edges.contains_edge import ContainsEdge
+from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+
+NK = NodeMetadataKey
+
+
+@dataclass
+class AwsAccountNode(Node):
+    """An AWS account serving as the root container for all discovered resources."""
+
+    node_type: str = NodeType.AWS_ACCOUNT
+
+    _allowed_outgoing_edges: ClassVar[frozenset[type]] = frozenset({
+        ContainsEdge,
+    })
+    _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({
+        ContainsEdge,
+    })
+
+    @classmethod
+    def create(
+        cls,
+        organization_id: uuid.UUID,
+        urn: URN,
+        parent_urn: URN | None = None,
+        *,
+        account_id: str,
+        region: str = "",
+        **meta: str,
+    ) -> AwsAccountNode:
+        metadata = NodeMetadata({
+            NK.ACCOUNT_ID: account_id,
+            NK.REGION: region,
+        })
+        for k, v in meta.items():
+            metadata[k] = v
+        return cls(
+            organization_id=organization_id,
+            urn=urn,
+            parent_urn=parent_urn,
+            metadata=metadata,
+        )
