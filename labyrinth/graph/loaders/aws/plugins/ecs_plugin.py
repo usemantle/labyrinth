@@ -137,9 +137,7 @@ class EcsResourcePlugin(AwsResourcePlugin):
                 # Security groups from network configuration
                 net_config = svc.get("networkConfiguration", {}).get("awsvpcConfiguration", {})
                 for sg_id in net_config.get("securityGroups", []):
-                    sg_urn = SecurityGroupNode.build_urn(
-                        account_id, region, "unknown", sg_id,
-                    )
+                    sg_urn = SecurityGroupNode.build_urn(account_id, region, sg_id)
                     edges.append(ProtectedByEdge.create(organization_id, svc_urn, sg_urn))
 
                 # Discover task definition

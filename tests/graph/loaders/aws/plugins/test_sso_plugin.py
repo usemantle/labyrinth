@@ -169,10 +169,13 @@ class TestSsoResourcePlugin:
         assert len(member_of) == 2
         froms = {str(e.from_urn) for e in member_of}
         assert froms == {
-            "urn:aws:sso:123456789012::user/u-1",
-            "urn:aws:sso:123456789012::user/u-2",
+            "urn:arn:aws:identitystore::123456789012:user/u-1",
+            "urn:arn:aws:identitystore::123456789012:user/u-2",
         }
-        assert all(str(e.to_urn) == "urn:aws:sso:123456789012::group/g-abc" for e in member_of)
+        assert all(
+            str(e.to_urn) == "urn:arn:aws:identitystore::123456789012:group/g-abc"
+            for e in member_of
+        )
 
     def test_user_without_primary_email_falls_back_to_first(self):
         session = _build_session(users=[{
@@ -221,7 +224,7 @@ class TestSsoResourcePlugin:
         assert ps.metadata[NK.PERMISSION_SET_INSTANCE_ARN] == DEFAULT_INSTANCE_ARN
         assert ps.metadata[NK.PERMISSION_SET_DESCRIPTION] == "Full admin"
         assert ps.metadata[NK.PERMISSION_SET_SESSION_DURATION] == "PT8H"
-        assert str(ps.urn) == "urn:aws:sso:123456789012::permission-set/ps-abc123"
+        assert str(ps.urn) == "urn:arn:aws:sso::123456789012:permission-set/ps-abc123"
 
     def test_discover_user_assignment_edge(self):
         ps_arn = (
@@ -249,10 +252,11 @@ class TestSsoResourcePlugin:
         accounts = {e.metadata["account_id"] for e in assigned}
         assert accounts == {"111111111111", "222222222222"}
         assert all(
-            str(e.from_urn) == "urn:aws:sso:123456789012::user/u-1" for e in assigned
+            str(e.from_urn) == "urn:arn:aws:identitystore::123456789012:user/u-1"
+            for e in assigned
         )
         assert all(
-            str(e.to_urn) == "urn:aws:sso:123456789012::permission-set/ps-abc123"
+            str(e.to_urn) == "urn:arn:aws:sso::123456789012:permission-set/ps-abc123"
             for e in assigned
         )
 
@@ -276,7 +280,7 @@ class TestSsoResourcePlugin:
         assigned = [e for e in edges if e.edge_type == EdgeType.SSO_ASSIGNED_TO]
         assert len(assigned) == 1
         edge = assigned[0]
-        assert str(edge.from_urn) == "urn:aws:sso:123456789012::group/g-1"
+        assert str(edge.from_urn) == "urn:arn:aws:identitystore::123456789012:group/g-1"
         assert edge.metadata["account_id"] == "111111111111"
 
     def test_assignment_with_unknown_principal_skipped(self):

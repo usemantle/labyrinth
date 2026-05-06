@@ -11,14 +11,14 @@ import boto3
 from labyrinth.graph.edges.protected_by_edge import ProtectedByEdge
 from labyrinth.graph.graph_models import URN, Edge, Node
 from labyrinth.graph.loaders.aws.plugins._base import AwsResourcePlugin
-from labyrinth.graph.nodes.rds_cluster_node import RdsClusterNode
+from labyrinth.graph.nodes.rds_instance_node import RdsInstanceNode
 from labyrinth.graph.nodes.security_group_node import SecurityGroupNode
 
 logger = logging.getLogger(__name__)
 
 
 class RdsResourcePlugin(AwsResourcePlugin):
-    """Discover RDS clusters and instances in the account."""
+    """Discover RDS DB instances in the account."""
 
     def service_name(self) -> str:
         return "rds"
@@ -36,7 +36,6 @@ class RdsResourcePlugin(AwsResourcePlugin):
         nodes: list[Node] = []
         edges: list[Edge] = []
 
-        # Discover RDS instances (covers both standalone and cluster members)
         try:
             paginator = rds.get_paginator("describe_db_instances")
             for page in paginator.paginate():
@@ -65,13 +64,13 @@ class RdsResourcePlugin(AwsResourcePlugin):
         endpoint = endpoint_info.get("Address")
         port = endpoint_info.get("Port")
 
-        rds_urn = RdsClusterNode.build_urn(account_id, region, db_id)
+        rds_urn = RdsInstanceNode.build_urn(account_id, region, db_id)
 
-        node = RdsClusterNode.create(
+        node = RdsInstanceNode.create(
             organization_id=organization_id,
             urn=rds_urn,
             parent_urn=account_urn,
-            cluster_id=db_id,
+            instance_id=db_id,
             engine=instance.get("Engine"),
             endpoint=endpoint,
             port=port,
@@ -86,8 +85,7 @@ class RdsResourcePlugin(AwsResourcePlugin):
         for sg in instance.get("VpcSecurityGroups", []):
             sg_id = sg.get("VpcSecurityGroupId")
             if sg_id:
-                vpc_id = instance.get("DBSubnetGroup", {}).get("VpcId", "unknown")
-                sg_urn = SecurityGroupNode.build_urn(account_id, region, vpc_id, sg_id)
+                sg_urn = SecurityGroupNode.build_urn(account_id, region, sg_id)
                 edges.append(ProtectedByEdge.create(
                     organization_id, rds_urn, sg_urn,
                 ))

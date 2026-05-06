@@ -10,12 +10,13 @@ from labyrinth.graph.edges.allows_traffic_to_edge import AllowsTrafficToEdge
 from labyrinth.graph.edges.contains_edge import ContainsEdge
 from labyrinth.graph.edges.protected_by_edge import ProtectedByEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class SecurityGroupNode(Node):
+class SecurityGroupNode(AwsResourceMixin, Node):
     """An AWS security group with ingress/egress rules."""
 
     node_type: str = NodeType.SECURITY_GROUP
@@ -29,14 +30,11 @@ class SecurityGroupNode(Node):
         AllowsTrafficToEdge,
     })
 
-    @staticmethod
-    def build_urn(
-        account_id: str,
-        region: str,
-        vpc_id: str,
-        sg_id: str,
-    ) -> URN:
-        return URN(f"urn:aws:vpc:{account_id}:{region}:{vpc_id}/sg/{sg_id}")
+    @classmethod
+    def build_urn(cls, account_id: str, region: str, sg_id: str) -> URN:
+        return cls.urn_from_arn(
+            f"arn:aws:ec2:{region}:{account_id}:security-group/{sg_id}",
+        )
 
     @classmethod
     def create(

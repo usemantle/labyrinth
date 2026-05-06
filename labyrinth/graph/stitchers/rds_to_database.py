@@ -1,4 +1,4 @@
-"""Stitcher: RDS_CLUSTER nodes -> DATABASE nodes via HostsEdge."""
+"""Stitcher: RDS_INSTANCE nodes -> DATABASE nodes via HostsEdge."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from labyrinth.graph.stitchers._base import Stitcher
 
 
 class RdsToDatabaseStitcher(Stitcher):
-    """Match RDS cluster endpoints to database hosts."""
+    """Match RDS instance endpoints to database hosts."""
 
     def stitch(self, organization_id: uuid.UUID, graph: Graph, context: dict) -> Graph:
         NK = NodeMetadataKey
@@ -24,7 +24,7 @@ class RdsToDatabaseStitcher(Stitcher):
 
         idx = self.index_nodes(
             graph,
-            types={NodeType.RDS_CLUSTER, NodeType.DATABASE},
+            types={NodeType.RDS_INSTANCE, NodeType.DATABASE},
             metadata_keys={NK.RDS_ENDPOINT, NK.HOST},
         )
 

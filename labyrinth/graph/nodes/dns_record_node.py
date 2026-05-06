@@ -9,13 +9,14 @@ from typing import ClassVar
 from labyrinth.graph.edges.contains_edge import ContainsEdge
 from labyrinth.graph.edges.resolves_to_edge import ResolvesToEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class DnsRecordNode(Node):
-    """A DNS record from Route53 or similar provider."""
+class DnsRecordNode(AwsResourceMixin, Node):
+    """A Route53 DNS record."""
 
     node_type: str = NodeType.DNS_RECORD
 
@@ -26,15 +27,16 @@ class DnsRecordNode(Node):
         ContainsEdge,
     })
 
-    @staticmethod
+    @classmethod
     def build_urn(
-        account_id: str,
+        cls,
         zone_id: str,
         record_name: str,
         record_type: str,
     ) -> URN:
-        return URN(
-            f"urn:aws:route53:{account_id}::{zone_id}/{record_name}/{record_type}",
+        # Route53 records have no real ARN; synthesise one off the hosted-zone ARN.
+        return cls.urn_from_arn(
+            f"arn:aws:route53:::hostedzone/{zone_id}/recordset/{record_name}/{record_type}",
         )
 
     @classmethod

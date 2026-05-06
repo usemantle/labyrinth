@@ -9,12 +9,13 @@ from typing import ClassVar
 from labyrinth.graph.edges.assumes_edge import AssumesEdge
 from labyrinth.graph.edges.references_edge import ReferencesEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class EcsTaskDefinitionNode(Node):
+class EcsTaskDefinitionNode(AwsResourceMixin, Node):
     """An AWS ECS task definition."""
 
     node_type: str = NodeType.ECS_TASK_DEFINITION
@@ -27,15 +28,16 @@ class EcsTaskDefinitionNode(Node):
         ReferencesEdge,
     })
 
-    @staticmethod
+    @classmethod
     def build_urn(
+        cls,
         account_id: str,
         region: str,
         family: str,
         revision: int,
     ) -> URN:
-        return URN(
-            f"urn:aws:ecs:{account_id}:{region}:taskdef/{family}:{revision}",
+        return cls.urn_from_arn(
+            f"arn:aws:ecs:{region}:{account_id}:task-definition/{family}:{revision}",
         )
 
     @classmethod

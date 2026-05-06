@@ -55,7 +55,7 @@ class Elbv2ResourcePlugin(AwsResourcePlugin):
             lb_arn = lb.get("LoadBalancerArn", "")
             lb_state = lb.get("State", {}).get("Code", "unknown")
 
-            lb_urn = LoadBalancerNode.build_elb_urn(account_id, region, lb_name)
+            lb_urn = LoadBalancerNode.build_urn(account_id, region, lb_name)
 
             # Collect listeners
             listeners = self._describe_listeners(elbv2, lb_arn)
@@ -84,9 +84,7 @@ class Elbv2ResourcePlugin(AwsResourcePlugin):
 
             # Security groups
             for sg_id in lb.get("SecurityGroups", []):
-                sg_urn = SecurityGroupNode.build_urn(
-                    account_id, region, "unknown", sg_id,
-                )
+                sg_urn = SecurityGroupNode.build_urn(account_id, region, sg_id)
                 edges.append(ProtectedByEdge.create(organization_id, lb_urn, sg_urn))
 
             # Target groups for this LB

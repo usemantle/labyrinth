@@ -12,12 +12,13 @@ from labyrinth.graph.edges.member_of_edge import MemberOfEdge
 from labyrinth.graph.edges.okta_edges import OktaMapsToEdge
 from labyrinth.graph.edges.sso_assigned_to_edge import SsoAssignedToEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class SsoUserNode(Node):
+class SsoUserNode(AwsResourceMixin, Node):
     """An AWS IAM Identity Center user (the AWS-side counterpart of an IdP Person)."""
 
     node_type: str = NodeType.SSO_USER
@@ -32,9 +33,11 @@ class SsoUserNode(Node):
         OktaMapsToEdge,
     })
 
-    @staticmethod
-    def build_urn(account_id: str, user_id: str) -> URN:
-        return URN(f"urn:aws:sso:{account_id}::user/{user_id}")
+    @classmethod
+    def build_urn(cls, account_id: str, user_id: str) -> URN:
+        return cls.urn_from_arn(
+            f"arn:aws:identitystore::{account_id}:user/{user_id}",
+        )
 
     @classmethod
     def create(
