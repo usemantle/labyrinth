@@ -60,7 +60,7 @@ class IamResourcePlugin(AwsResourcePlugin):
             for page in paginator.paginate():
                 for role in page.get("Roles", []):
                     role_name = role["RoleName"]
-                    role_urn = URN(f"urn:aws:iam:{account_id}::role/{role_name}")
+                    role_urn = IamRoleNode.build_urn(account_id, role_name)
 
                     trust_policy = role.get("AssumeRolePolicyDocument")
                     if isinstance(trust_policy, str):
@@ -100,10 +100,10 @@ class IamResourcePlugin(AwsResourcePlugin):
                     policy_arn_str = policy.get("PolicyArn", "")
 
                     # Use the policy ARN to determine if it's AWS-managed or customer-managed
-                    if policy_arn_str.startswith("arn:aws:iam::aws:"):
-                        policy_urn = URN(f"urn:aws:iam:{account_id}::policy/aws/{policy_name}")
-                    else:
-                        policy_urn = URN(f"urn:aws:iam:{account_id}::policy/{policy_name}")
+                    aws_managed = policy_arn_str.startswith("arn:aws:iam::aws:")
+                    policy_urn = IamPolicyNode.build_urn(
+                        account_id, policy_name, aws_managed=aws_managed,
+                    )
 
                     edges.append(AttachesEdge.create(
                         organization_id, policy_urn, role_urn,
@@ -126,7 +126,7 @@ class IamResourcePlugin(AwsResourcePlugin):
             for page in paginator.paginate():
                 for user in page.get("Users", []):
                     user_name = user["UserName"]
-                    user_urn = URN(f"urn:aws:iam:{account_id}::user/{user_name}")
+                    user_urn = IamUserNode.build_urn(account_id, user_name)
 
                     # Get access keys
                     access_keys = self._get_access_keys(iam, user_name)
@@ -197,10 +197,10 @@ class IamResourcePlugin(AwsResourcePlugin):
                     policy_name = policy["PolicyName"]
                     policy_arn_str = policy.get("PolicyArn", "")
 
-                    if policy_arn_str.startswith("arn:aws:iam::aws:"):
-                        policy_urn = URN(f"urn:aws:iam:{account_id}::policy/aws/{policy_name}")
-                    else:
-                        policy_urn = URN(f"urn:aws:iam:{account_id}::policy/{policy_name}")
+                    aws_managed = policy_arn_str.startswith("arn:aws:iam::aws:")
+                    policy_urn = IamPolicyNode.build_urn(
+                        account_id, policy_name, aws_managed=aws_managed,
+                    )
 
                     edges.append(AttachesEdge.create(
                         organization_id, policy_urn, user_urn,
@@ -224,7 +224,7 @@ class IamResourcePlugin(AwsResourcePlugin):
                 for policy in page.get("Policies", []):
                     policy_name = policy["PolicyName"]
                     policy_arn_str = policy.get("Arn", "")
-                    policy_urn = URN(f"urn:aws:iam:{account_id}::policy/{policy_name}")
+                    policy_urn = IamPolicyNode.build_urn(account_id, policy_name)
 
                     # Get policy document for the default version
                     policy_doc = self._get_policy_document(

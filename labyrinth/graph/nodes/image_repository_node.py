@@ -9,13 +9,14 @@ from typing import ClassVar
 from labyrinth.graph.edges.builds_edge import BuildsEdge
 from labyrinth.graph.edges.contains_edge import ContainsEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class ImageRepositoryNode(Node):
-    """A container image repository (e.g., AWS ECR repository)."""
+class ImageRepositoryNode(AwsResourceMixin, Node):
+    """An AWS ECR repository."""
 
     node_type: str = NodeType.IMAGE_REPOSITORY
 
@@ -25,6 +26,12 @@ class ImageRepositoryNode(Node):
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({
         BuildsEdge,
     })
+
+    @classmethod
+    def build_urn(cls, account_id: str, region: str, repository_name: str) -> URN:
+        return cls.urn_from_arn(
+            f"arn:aws:ecr:{region}:{account_id}:repository/{repository_name}",
+        )
 
     @classmethod
     def create(

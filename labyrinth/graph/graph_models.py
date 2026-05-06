@@ -22,7 +22,7 @@ class NodeType(enum.StrEnum):
     SCHEMA = "schema"
     TABLE = "table"
     COLUMN = "column"
-    RDS_CLUSTER = "rds_cluster"
+    RDS_INSTANCE = "rds_instance"
 
     # AWS Infrastructure
     AWS_ACCOUNT = "aws_account"
@@ -39,6 +39,7 @@ class NodeType(enum.StrEnum):
     # Networking
     DNS_RECORD = "dns_record"
     LOAD_BALANCER = "load_balancer"
+    API_GATEWAY = "api_gateway"
     BACKEND_GROUP = "backend_group"
 
     # Security
@@ -227,7 +228,7 @@ class NodeMetadataKey(enum.StrEnum):
     RDS_ENCRYPTION_ENABLED = "rds_encryption_enabled"
     RDS_STORAGE_ENCRYPTED = "rds_storage_encrypted"
     RDS_MULTI_AZ = "rds_multi_az"
-    RDS_CLUSTER_ID = "rds_cluster_id"
+    RDS_INSTANCE_ID = "rds_instance_id"
 
     # ── ECS ─────────────────────────────────────────────────────────────
     ECS_CLUSTER_NAME = "ecs_cluster_name"

@@ -24,10 +24,18 @@ class DnsToLoadBalancerStitcher(Stitcher):
         NK = NodeMetadataKey
         result = Graph()
 
-        idx = self.index_nodes(graph, types={NodeType.LOAD_BALANCER, NodeType.DNS_RECORD})
+        idx = self.index_nodes(
+            graph,
+            types={NodeType.LOAD_BALANCER, NodeType.API_GATEWAY, NodeType.DNS_RECORD},
+        )
 
         lb_by_dns: dict[str, URN] = {}
         for node in idx.nodes_of_type(NodeType.LOAD_BALANCER):
+            dns_name = node.metadata.get(NK.LB_DNS_NAME, "")
+            if dns_name:
+                lb_by_dns[_normalize_lb_dns(dns_name)] = node.urn
+
+        for node in idx.nodes_of_type(NodeType.API_GATEWAY):
             dns_name = node.metadata.get(NK.LB_DNS_NAME, "")
             if dns_name:
                 lb_by_dns[_normalize_lb_dns(dns_name)] = node.urn

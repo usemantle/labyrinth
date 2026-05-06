@@ -8,12 +8,13 @@ from typing import ClassVar
 
 from labyrinth.graph.edges.attaches_edge import AttachesEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class IamPolicyNode(Node):
+class IamPolicyNode(AwsResourceMixin, Node):
     """An AWS IAM policy."""
 
     node_type: str = NodeType.IAM_POLICY
@@ -22,6 +23,17 @@ class IamPolicyNode(Node):
         AttachesEdge,
     })
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset()
+
+    @classmethod
+    def build_urn(
+        cls,
+        account_id: str,
+        policy_name: str,
+        *,
+        aws_managed: bool = False,
+    ) -> URN:
+        scope = "aws" if aws_managed else account_id
+        return cls.urn_from_arn(f"arn:aws:iam::{scope}:policy/{policy_name}")
 
     @classmethod
     def create(

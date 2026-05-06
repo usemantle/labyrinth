@@ -11,13 +11,14 @@ from labyrinth.graph.edges.contains_edge import ContainsEdge
 from labyrinth.graph.edges.member_of_edge import MemberOfEdge
 from labyrinth.graph.edges.sso_assigned_to_edge import SsoAssignedToEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class SsoGroupNode(Node):
-    """An AWS SSO / Identity Center group."""
+class SsoGroupNode(AwsResourceMixin, Node):
+    """An AWS IAM Identity Center group."""
 
     node_type: str = NodeType.SSO_GROUP
 
@@ -30,6 +31,12 @@ class SsoGroupNode(Node):
         ContainsEdge,
         MemberOfEdge,
     })
+
+    @classmethod
+    def build_urn(cls, account_id: str, group_id: str) -> URN:
+        return cls.urn_from_arn(
+            f"arn:aws:identitystore::{account_id}:group/{group_id}",
+        )
 
     @classmethod
     def create(

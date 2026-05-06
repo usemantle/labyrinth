@@ -59,8 +59,8 @@ class TestApiGatewayResourcePlugin:
         )
 
         assert len(nodes) == 1
-        assert nodes[0].node_type == "load_balancer"
-        assert nodes[0].metadata[NK.LB_TYPE] == "api_gateway_http"
+        assert nodes[0].node_type == "api_gateway"
+        assert nodes[0].metadata[NK.LB_TYPE] == "http"
         assert nodes[0].metadata[NK.LB_SCHEME] == "internet-facing"
         assert nodes[0].metadata[NK.LB_DNS_NAME] == "https://abc123.execute-api.us-east-1.amazonaws.com"
 
@@ -81,7 +81,8 @@ class TestApiGatewayResourcePlugin:
         )
 
         assert len(nodes) == 1
-        assert nodes[0].metadata[NK.LB_TYPE] == "api_gateway_rest"
+        assert nodes[0].node_type == "api_gateway"
+        assert nodes[0].metadata[NK.LB_TYPE] == "rest"
         assert nodes[0].metadata[NK.LB_SCHEME] == "internet-facing"
         assert "xyz789.execute-api.us-east-1.amazonaws.com" in nodes[0].metadata[NK.LB_DNS_NAME]
 
@@ -141,5 +142,5 @@ class TestApiGatewayResourcePlugin:
 
         assert len(nodes) == 2
         lb_types = {n.metadata[NK.LB_TYPE] for n in nodes}
-        assert "api_gateway_http" in lb_types
-        assert "api_gateway_rest" in lb_types
+        assert "http" in lb_types
+        assert "rest" in lb_types

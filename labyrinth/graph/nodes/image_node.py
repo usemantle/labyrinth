@@ -8,13 +8,14 @@ from typing import ClassVar
 
 from labyrinth.graph.edges.contains_edge import ContainsEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class ImageNode(Node):
-    """A container image identified by digest (e.g., an ECR image)."""
+class ImageNode(AwsResourceMixin, Node):
+    """An AWS ECR container image identified by digest."""
 
     node_type: str = NodeType.IMAGE
 
@@ -22,6 +23,18 @@ class ImageNode(Node):
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,
     })
+
+    @classmethod
+    def build_urn(
+        cls,
+        account_id: str,
+        region: str,
+        repository_name: str,
+        image_digest: str,
+    ) -> URN:
+        return cls.urn_from_arn(
+            f"arn:aws:ecr:{region}:{account_id}:repository/{repository_name}/image/{image_digest}",
+        )
 
     @classmethod
     def create(

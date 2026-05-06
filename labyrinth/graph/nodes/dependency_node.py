@@ -28,6 +28,10 @@ class DependencyNode(Node):
         DependsOnEdge,
     })
 
+    @staticmethod
+    def build_urn(codebase_urn: URN, package_name: str) -> URN:
+        return URN(f"{codebase_urn}/dep/{package_name}")
+
     @classmethod
     def create(
         cls,

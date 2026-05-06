@@ -9,13 +9,14 @@ from typing import ClassVar
 from labyrinth.graph.edges.contains_edge import ContainsEdge
 from labyrinth.graph.edges.routes_to_edge import RoutesToEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class BackendGroupNode(Node):
-    """A backend group (AWS target group, GCP backend service, etc.)."""
+class BackendGroupNode(AwsResourceMixin, Node):
+    """An AWS ELB target group."""
 
     node_type: str = NodeType.BACKEND_GROUP
 
@@ -26,6 +27,18 @@ class BackendGroupNode(Node):
         RoutesToEdge,
         ContainsEdge,
     })
+
+    @classmethod
+    def build_urn(
+        cls,
+        account_id: str,
+        region: str,
+        lb_name: str,
+        bg_name: str,
+    ) -> URN:
+        return cls.urn_from_arn(
+            f"arn:aws:elasticloadbalancing:{region}:{account_id}:targetgroup/{lb_name}/{bg_name}",
+        )
 
     @classmethod
     def create(

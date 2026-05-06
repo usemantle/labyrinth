@@ -8,13 +8,14 @@ from typing import ClassVar
 
 from labyrinth.graph.edges.contains_edge import ContainsEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class BucketNode(Node):
-    """An S3 bucket or equivalent object store container."""
+class BucketNode(AwsResourceMixin, Node):
+    """An AWS S3 bucket."""
 
     node_type: str = NodeType.S3_BUCKET
 
@@ -22,6 +23,10 @@ class BucketNode(Node):
         ContainsEdge,
     })
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset()
+
+    @classmethod
+    def build_urn(cls, bucket_name: str) -> URN:
+        return cls.urn_from_arn(f"arn:aws:s3:::{bucket_name}")
 
     @classmethod
     def create(

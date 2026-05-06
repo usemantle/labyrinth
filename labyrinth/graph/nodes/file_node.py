@@ -32,6 +32,10 @@ class FileNode(Node):
         ExecutesEdge,
     })
 
+    @staticmethod
+    def build_urn(codebase_urn: URN, rel_path: str) -> URN:
+        return URN(f"{codebase_urn}/{rel_path}")
+
     @classmethod
     def create(
         cls,

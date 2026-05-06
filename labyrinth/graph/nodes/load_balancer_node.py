@@ -1,4 +1,4 @@
-"""LoadBalancerNode — ALB, NLB, or API Gateway endpoint."""
+"""LoadBalancerNode — an AWS ALB or NLB."""
 
 from __future__ import annotations
 
@@ -11,13 +11,14 @@ from labyrinth.graph.edges.protected_by_edge import ProtectedByEdge
 from labyrinth.graph.edges.resolves_to_edge import ResolvesToEdge
 from labyrinth.graph.edges.routes_to_edge import RoutesToEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class LoadBalancerNode(Node):
-    """A load balancer (ALB, NLB) or API Gateway endpoint."""
+class LoadBalancerNode(AwsResourceMixin, Node):
+    """An AWS Elastic Load Balancer (ALB or NLB)."""
 
     node_type: str = NodeType.LOAD_BALANCER
 
@@ -29,6 +30,12 @@ class LoadBalancerNode(Node):
         ResolvesToEdge,
         ContainsEdge,
     })
+
+    @classmethod
+    def build_urn(cls, account_id: str, region: str, lb_name: str) -> URN:
+        return cls.urn_from_arn(
+            f"arn:aws:elasticloadbalancing:{region}:{account_id}:loadbalancer/{lb_name}",
+        )
 
     @classmethod
     def create(
@@ -43,9 +50,6 @@ class LoadBalancerNode(Node):
         listeners: list[dict] | None = None,
         lb_state: str | None = None,
         arn: str | None = None,
-        api_gw_stage: str | None = None,
-        api_gw_endpoint_type: str | None = None,
-        api_gw_auth_type: str | None = None,
     ) -> LoadBalancerNode:
         meta = NodeMetadata({
             NK.LB_TYPE: lb_type,
@@ -59,12 +63,6 @@ class LoadBalancerNode(Node):
             meta[NK.LB_STATE] = lb_state
         if arn is not None:
             meta[NK.ARN] = arn
-        if api_gw_stage is not None:
-            meta[NK.API_GW_STAGE] = api_gw_stage
-        if api_gw_endpoint_type is not None:
-            meta[NK.API_GW_ENDPOINT_TYPE] = api_gw_endpoint_type
-        if api_gw_auth_type is not None:
-            meta[NK.API_GW_AUTH_TYPE] = api_gw_auth_type
         return cls(
             organization_id=organization_id,
             urn=urn,

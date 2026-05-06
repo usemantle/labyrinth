@@ -8,12 +8,13 @@ from typing import ClassVar
 
 from labyrinth.graph.edges.contains_edge import ContainsEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class NaclNode(Node):
+class NaclNode(AwsResourceMixin, Node):
     """An AWS network ACL associated with a VPC subnet."""
 
     node_type: str = NodeType.NACL
@@ -22,6 +23,12 @@ class NaclNode(Node):
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,
     })
+
+    @classmethod
+    def build_urn(cls, account_id: str, region: str, nacl_id: str) -> URN:
+        return cls.urn_from_arn(
+            f"arn:aws:ec2:{region}:{account_id}:network-acl/{nacl_id}",
+        )
 
     @classmethod
     def create(

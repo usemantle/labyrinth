@@ -8,12 +8,13 @@ from typing import ClassVar
 
 from labyrinth.graph.edges.contains_edge import ContainsEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class VpcNode(Node):
+class VpcNode(AwsResourceMixin, Node):
     """An AWS VPC."""
 
     node_type: str = NodeType.VPC
@@ -24,6 +25,10 @@ class VpcNode(Node):
     _allowed_incoming_edges: ClassVar[frozenset[type]] = frozenset({
         ContainsEdge,
     })
+
+    @classmethod
+    def build_urn(cls, account_id: str, region: str, vpc_id: str) -> URN:
+        return cls.urn_from_arn(f"arn:aws:ec2:{region}:{account_id}:vpc/{vpc_id}")
 
     @classmethod
     def create(

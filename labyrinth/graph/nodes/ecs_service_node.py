@@ -12,12 +12,13 @@ from labyrinth.graph.edges.protected_by_edge import ProtectedByEdge
 from labyrinth.graph.edges.references_edge import ReferencesEdge
 from labyrinth.graph.edges.routes_to_edge import RoutesToEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class EcsServiceNode(Node):
+class EcsServiceNode(AwsResourceMixin, Node):
     """An AWS ECS service running within a cluster."""
 
     node_type: str = NodeType.ECS_SERVICE
@@ -31,6 +32,18 @@ class EcsServiceNode(Node):
         ContainsEdge,
         RoutesToEdge,
     })
+
+    @classmethod
+    def build_urn(
+        cls,
+        account_id: str,
+        region: str,
+        cluster_name: str,
+        service_name: str,
+    ) -> URN:
+        return cls.urn_from_arn(
+            f"arn:aws:ecs:{region}:{account_id}:service/{cluster_name}/{service_name}",
+        )
 
     @classmethod
     def create(

@@ -10,7 +10,7 @@ import boto3
 
 from labyrinth.graph.graph_models import URN, Edge, Node, NodeMetadataKey
 from labyrinth.graph.loaders.aws.plugins._base import AwsResourcePlugin
-from labyrinth.graph.nodes.load_balancer_node import LoadBalancerNode
+from labyrinth.graph.nodes.api_gateway_node import ApiGatewayNode
 
 NK = NodeMetadataKey
 
@@ -37,13 +37,13 @@ class ApiGatewayResourcePlugin(AwsResourcePlugin):
 
         # HTTP APIs (API Gateway v2)
         self._discover_http_apis(
-            session, account_id, region, organization_id, account_urn,
+            session, region, organization_id, account_urn,
             nodes, edges,
         )
 
         # REST APIs (API Gateway v1)
         self._discover_rest_apis(
-            session, account_id, region, organization_id, account_urn,
+            session, region, organization_id, account_urn,
             nodes, edges,
         )
 
@@ -53,7 +53,6 @@ class ApiGatewayResourcePlugin(AwsResourcePlugin):
     def _discover_http_apis(
         self,
         session: boto3.Session,
-        account_id: str,
         region: str,
         organization_id: uuid.UUID,
         account_urn: URN,
@@ -72,22 +71,19 @@ class ApiGatewayResourcePlugin(AwsResourcePlugin):
             endpoint = api.get("ApiEndpoint", "")
             protocol_type = api.get("ProtocolType", "HTTP")
 
-            # Determine scheme from endpoint type
-            lb_scheme = "internet-facing"
+            urn = ApiGatewayNode.build_urn(region, api_id)
 
-            urn = URN(f"urn:aws:apigateway:{account_id}:{region}:{api_id}")
+            api_gw_type = "http" if protocol_type == "HTTP" else "websocket"
 
-            lb_type = "api_gateway_http" if protocol_type == "HTTP" else "api_gateway_websocket"
-
-            node = LoadBalancerNode.create(
+            node = ApiGatewayNode.create(
                 organization_id=organization_id,
                 urn=urn,
                 parent_urn=account_urn,
-                lb_type=lb_type,
-                lb_scheme=lb_scheme,
-                lb_dns_name=endpoint,
-                arn=api.get("ApiId"),
-                api_gw_endpoint_type=protocol_type,
+                api_gw_type=api_gw_type,
+                scheme="internet-facing",
+                dns_name=endpoint,
+                api_id=api.get("ApiId"),
+                endpoint_type=protocol_type,
             )
 
             # Discover integrations (e.g. VPC_LINK to ALB)
@@ -105,7 +101,6 @@ class ApiGatewayResourcePlugin(AwsResourcePlugin):
     def _discover_rest_apis(
         self,
         session: boto3.Session,
-        account_id: str,
         region: str,
         organization_id: uuid.UUID,
         account_urn: URN,
@@ -125,23 +120,23 @@ class ApiGatewayResourcePlugin(AwsResourcePlugin):
             endpoint_types = endpoint_config.get("types", [])
 
             # Determine scheme
-            lb_scheme = "internal" if "PRIVATE" in endpoint_types else "internet-facing"
+            scheme = "internal" if "PRIVATE" in endpoint_types else "internet-facing"
             endpoint_type = endpoint_types[0] if endpoint_types else "EDGE"
 
             # REST API DNS name follows a predictable pattern
             dns_name = f"{api_id}.execute-api.{region}.amazonaws.com"
 
-            urn = URN(f"urn:aws:apigateway:{account_id}:{region}:{api_id}")
+            urn = ApiGatewayNode.build_urn(region, api_id)
 
-            node = LoadBalancerNode.create(
+            node = ApiGatewayNode.create(
                 organization_id=organization_id,
                 urn=urn,
                 parent_urn=account_urn,
-                lb_type="api_gateway_rest",
-                lb_scheme=lb_scheme,
-                lb_dns_name=dns_name,
-                arn=api_id,
-                api_gw_endpoint_type=endpoint_type,
+                api_gw_type="rest",
+                scheme=scheme,
+                dns_name=dns_name,
+                api_id=api_id,
+                endpoint_type=endpoint_type,
             )
             nodes.append(node)
 

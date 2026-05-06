@@ -1,5 +1,6 @@
 """Typed node subclasses for the security graph."""
 
+from labyrinth.graph.nodes.api_gateway_node import ApiGatewayNode
 from labyrinth.graph.nodes.aws_account_node import AwsAccountNode
 from labyrinth.graph.nodes.backend_group_node import BackendGroupNode
 from labyrinth.graph.nodes.bucket_node import BucketNode
@@ -23,7 +24,7 @@ from labyrinth.graph.nodes.image_repository_node import ImageRepositoryNode
 from labyrinth.graph.nodes.load_balancer_node import LoadBalancerNode
 from labyrinth.graph.nodes.nacl_node import NaclNode
 from labyrinth.graph.nodes.object_path_node import ObjectPathNode
-from labyrinth.graph.nodes.rds_cluster_node import RdsClusterNode
+from labyrinth.graph.nodes.rds_instance_node import RdsInstanceNode
 from labyrinth.graph.nodes.schema_node import SchemaNode
 from labyrinth.graph.nodes.security_group_node import SecurityGroupNode
 from labyrinth.graph.nodes.sso_group_node import SsoGroupNode
@@ -31,6 +32,7 @@ from labyrinth.graph.nodes.table_node import TableNode
 from labyrinth.graph.nodes.vpc_node import VpcNode
 
 __all__ = [
+    "ApiGatewayNode",
     "AwsAccountNode",
     "BackendGroupNode",
     "BucketNode",
@@ -54,7 +56,7 @@ __all__ = [
     "LoadBalancerNode",
     "NaclNode",
     "ObjectPathNode",
-    "RdsClusterNode",
+    "RdsInstanceNode",
     "SchemaNode",
     "SecurityGroupNode",
     "SsoGroupNode",

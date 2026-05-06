@@ -10,12 +10,13 @@ from labyrinth.graph.edges.assumes_edge import AssumesEdge
 from labyrinth.graph.edges.attaches_edge import AttachesEdge
 from labyrinth.graph.edges.member_of_edge import MemberOfEdge
 from labyrinth.graph.graph_models import URN, Node, NodeMetadata, NodeMetadataKey, NodeType
+from labyrinth.graph.nodes._aws_resource_mixin import AwsResourceMixin
 
 NK = NodeMetadataKey
 
 
 @dataclass
-class IamUserNode(Node):
+class IamUserNode(AwsResourceMixin, Node):
     """An AWS IAM user."""
 
     node_type: str = NodeType.IAM_USER
@@ -27,6 +28,10 @@ class IamUserNode(Node):
         AttachesEdge,
         MemberOfEdge,
     })
+
+    @classmethod
+    def build_urn(cls, account_id: str, user_name: str) -> URN:
+        return cls.urn_from_arn(f"arn:aws:iam::{account_id}:user/{user_name}")
 
     @classmethod
     def create(

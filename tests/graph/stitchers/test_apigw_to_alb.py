@@ -2,7 +2,8 @@
 
 import uuid
 
-from labyrinth.graph.graph_models import URN, EdgeType, Graph, NodeMetadataKey
+from labyrinth.graph.graph_models import EdgeType, Graph, NodeMetadataKey
+from labyrinth.graph.nodes.api_gateway_node import ApiGatewayNode
 from labyrinth.graph.nodes.load_balancer_node import LoadBalancerNode
 from labyrinth.graph.stitchers.apigw_to_alb import ApiGwToAlbStitcher
 
@@ -14,17 +15,17 @@ class TestApiGwToAlb:
     def test_apigw_to_alb_via_integration_uri(self):
         alb = LoadBalancerNode.create(
             organization_id=ORG_ID,
-            urn=URN("urn:aws:elb:123:us-east-1:my-alb"),
+            urn=LoadBalancerNode.build_urn("123", "us-east-1", "my-alb"),
             lb_type="alb", lb_scheme="internal",
             lb_dns_name="internal-my-alb-123.us-east-1.elb.amazonaws.com",
             listeners=[{"port": 80, "protocol": "HTTP"}],
             arn="arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/my-alb/abc123",
         )
-        apigw = LoadBalancerNode.create(
+        apigw = ApiGatewayNode.create(
             organization_id=ORG_ID,
-            urn=URN("urn:aws:apigateway:123:us-east-1:api789"),
-            lb_type="api_gateway_http", lb_scheme="internet-facing",
-            lb_dns_name="https://api789.execute-api.us-east-1.amazonaws.com",
+            urn=ApiGatewayNode.build_urn("us-east-1", "api789"),
+            api_gw_type="http", scheme="internet-facing",
+            dns_name="https://api789.execute-api.us-east-1.amazonaws.com",
         )
         apigw.metadata[NK.API_GW_INTEGRATION_URIS] = [
             "arn:aws:elasticloadbalancing:us-east-1:123:listener/app/my-alb/abc123/def456",
@@ -41,16 +42,16 @@ class TestApiGwToAlb:
     def test_apigw_no_match_without_integration(self):
         alb = LoadBalancerNode.create(
             organization_id=ORG_ID,
-            urn=URN("urn:aws:elb:123:us-east-1:my-alb"),
+            urn=LoadBalancerNode.build_urn("123", "us-east-1", "my-alb"),
             lb_type="alb", lb_scheme="internal",
             lb_dns_name="my-alb-123.elb.amazonaws.com",
             arn="arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/my-alb/abc",
         )
-        apigw = LoadBalancerNode.create(
+        apigw = ApiGatewayNode.create(
             organization_id=ORG_ID,
-            urn=URN("urn:aws:apigateway:123:us-east-1:api789"),
-            lb_type="api_gateway_http", lb_scheme="internet-facing",
-            lb_dns_name="https://api789.execute-api.us-east-1.amazonaws.com",
+            urn=ApiGatewayNode.build_urn("us-east-1", "api789"),
+            api_gw_type="http", scheme="internet-facing",
+            dns_name="https://api789.execute-api.us-east-1.amazonaws.com",
         )
         graph = Graph(nodes=[alb, apigw])
         result = ApiGwToAlbStitcher().stitch(ORG_ID, graph, {})

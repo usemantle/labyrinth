@@ -17,6 +17,8 @@ from labyrinth.graph.loaders.aws.plugins._base import AwsResourcePlugin
 from labyrinth.graph.nodes.ecs_cluster_node import EcsClusterNode
 from labyrinth.graph.nodes.ecs_service_node import EcsServiceNode
 from labyrinth.graph.nodes.ecs_task_definition_node import EcsTaskDefinitionNode
+from labyrinth.graph.nodes.iam_role_node import IamRoleNode
+from labyrinth.graph.nodes.security_group_node import SecurityGroupNode
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +52,7 @@ class EcsResourcePlugin(AwsResourcePlugin):
 
         for cluster_arn in cluster_arns:
             cluster_name = cluster_arn.rsplit("/", 1)[-1]
-            cluster_urn = URN(f"urn:aws:ecs:{account_id}:{region}:{cluster_name}")
+            cluster_urn = EcsClusterNode.build_urn(account_id, region, cluster_name)
 
             cluster_node = EcsClusterNode.create(
                 organization_id=organization_id,
@@ -106,8 +108,8 @@ class EcsResourcePlugin(AwsResourcePlugin):
 
             for svc in resp.get("services", []):
                 svc_name = svc["serviceName"]
-                svc_urn = URN(
-                    f"urn:aws:ecs:{account_id}:{region}:{cluster_name}/{svc_name}",
+                svc_urn = EcsServiceNode.build_urn(
+                    account_id, region, cluster_name, svc_name,
                 )
                 task_def_arn = svc.get("taskDefinition", "")
 
@@ -135,7 +137,7 @@ class EcsResourcePlugin(AwsResourcePlugin):
                 # Security groups from network configuration
                 net_config = svc.get("networkConfiguration", {}).get("awsvpcConfiguration", {})
                 for sg_id in net_config.get("securityGroups", []):
-                    sg_urn = URN(f"urn:aws:vpc:{account_id}:{region}:unknown/sg/{sg_id}")
+                    sg_urn = SecurityGroupNode.build_urn(account_id, region, sg_id)
                     edges.append(ProtectedByEdge.create(organization_id, svc_urn, sg_urn))
 
                 # Discover task definition
@@ -166,8 +168,8 @@ class EcsResourcePlugin(AwsResourcePlugin):
         family = task_def.get("family", "unknown")
         revision = task_def.get("revision", 0)
 
-        td_urn = URN(
-            f"urn:aws:ecs:{account_id}:{region}:taskdef/{family}:{revision}",
+        td_urn = EcsTaskDefinitionNode.build_urn(
+            account_id, region, family, revision,
         )
 
         # Collect container images
@@ -199,7 +201,7 @@ class EcsResourcePlugin(AwsResourcePlugin):
         # Task definition assumes IAM roles
         if task_role_arn:
             role_name = task_role_arn.rsplit("/", 1)[-1]
-            role_urn = URN(f"urn:aws:iam:{account_id}::role/{role_name}")
+            role_urn = IamRoleNode.build_urn(account_id, role_name)
             edges.append(AssumesEdge.create(
                 organization_id, td_urn, role_urn,
                 metadata=EdgeMetadata({EK.ASSUMED_VIA: "taskRoleArn"}),
@@ -207,7 +209,7 @@ class EcsResourcePlugin(AwsResourcePlugin):
 
         if execution_role_arn:
             role_name = execution_role_arn.rsplit("/", 1)[-1]
-            role_urn = URN(f"urn:aws:iam:{account_id}::role/{role_name}")
+            role_urn = IamRoleNode.build_urn(account_id, role_name)
             edges.append(AssumesEdge.create(
                 organization_id, td_urn, role_urn,
                 metadata=EdgeMetadata({EK.ASSUMED_VIA: "executionRoleArn"}),
