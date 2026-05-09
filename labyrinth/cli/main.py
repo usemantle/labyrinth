@@ -296,43 +296,9 @@ def scan() -> None:
 
 
 @cli.command()
-@click.option(
-    "--graph-path",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    default=None,
-    help="Explicit path to graph.json. Overrides the active project.",
-)
-def mcp(graph_path: Path | None) -> None:
-    """Start the MCP server for the active project's knowledge graph."""
-    import sys
-
-    # Redirect logging to stderr — stdout is reserved for MCP protocol.
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(levelname)s: %(message)s",
-        stream=sys.stderr,
-    )
-
-    if graph_path is None:
-        project = _get_active_project()
-        project_dir = PROJECTS_DIR / project
-        graph_path = project_dir / "graph.json"
-
-    if not graph_path.exists():
-        raise click.ClickException(
-            f"No graph.json found at '{graph_path}'. Run 'labyrinth scan' first."
-        )
-
-    from labyrinth.mcp.main import run_mcp_server
-
-    run_mcp_server(graph_path)
-
-
-@cli.command()
 @click.option("--port", default=8787, show_default=True, help="Port for the local HTTP server.")
 def serve(port: int) -> None:
-    """Launch the Labyrinth dashboard: graph visualization and agent actions."""
-    import json
+    """Launch the Labyrinth dashboard for graph visualization."""
     import shutil
     import webbrowser
     from functools import partial
@@ -358,22 +324,6 @@ def serve(port: int) -> None:
     shutil.copytree(serve_src, staging_dir, dirs_exist_ok=True)
     shutil.copy2(graph_path, staging_dir / "graph_data.json")
 
-    # Copy reports.json (or write empty default)
-    reports_path = project_dir / "reports.json"
-    if reports_path.exists():
-        shutil.copy2(reports_path, staging_dir / "reports.json")
-    else:
-        (staging_dir / "reports.json").write_text(json.dumps({"runs": []}, indent=2) + "\n")
-
-    # Copy heuristics.json (or write empty default)
-    heuristics_path = project_dir / "heuristics.json"
-    if heuristics_path.exists():
-        shutil.copy2(heuristics_path, staging_dir / "heuristics.json")
-    else:
-        (staging_dir / "heuristics.json").write_text(
-            json.dumps({"analyzed_at": None, "graph_generated_at": None, "candidates": []}, indent=2) + "\n"
-        )
-
     handler = partial(SimpleHTTPRequestHandler, directory=str(staging_dir))
     server = HTTPServer(("localhost", port), handler)
 
@@ -388,57 +338,6 @@ def serve(port: int) -> None:
         click.echo("\nStopping server.")
     finally:
         server.server_close()
-
-
-# ── Agent commands ────────────────────────────────────────────────────
-
-
-@cli.group()
-def agent() -> None:
-    """Autonomous agent commands."""
-
-
-@agent.command()
-def analyze() -> None:
-    """Run all heuristics against the knowledge graph and save findings."""
-    import asyncio
-
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-
-    project = _get_active_project()
-    project_dir = PROJECTS_DIR / project
-    graph_path = project_dir / "graph.json"
-
-    if not graph_path.exists():
-        raise click.ClickException(
-            f"No graph.json found for project '{project}'. Run 'labyrinth scan' first."
-        )
-
-    from labyrinth.agent.runner import run_analysis
-
-    asyncio.run(run_analysis(project_dir))
-
-
-@agent.command()
-@click.argument("candidate_id")
-def run(candidate_id: str) -> None:
-    """Execute the agent against a single candidate by its UUID."""
-    import asyncio
-
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-
-    project = _get_active_project()
-    project_dir = PROJECTS_DIR / project
-    graph_path = project_dir / "graph.json"
-
-    if not graph_path.exists():
-        raise click.ClickException(
-            f"No graph.json found for project '{project}'. Run 'labyrinth scan' first."
-        )
-
-    from labyrinth.agent.runner import run_single_candidate
-
-    asyncio.run(run_single_candidate(project_dir, candidate_id))
 
 
 # ── Config commands ───────────────────────────────────────────────────

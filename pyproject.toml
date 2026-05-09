@@ -10,12 +10,10 @@ dependencies = [
     "networkx>=3.2",
     "pydantic>=2.12.5",
     "sqlalchemy>=2.0.44",
-    "mcp>=1.0.0",
     "rich-click>=1.8.0",
     "tomli_w>=1.0.0",
     "iterfzf>=0.8",
     "psycopg2>=2.9.11",
-    "claude-agent-sdk>=0.1.0",
     "okta>=3.4.2",
 ]
 
@@ -31,7 +29,6 @@ packages = ["labyrinth"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "labyrinth/cli/serve" = "labyrinth/cli/serve"
-"labyrinth/agent/skills" = "labyrinth/agent/skills"
 
 [tool.uv]
 dev-dependencies = [

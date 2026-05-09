@@ -1,11 +1,7 @@
 """Tests for PostgreSQL role and grant discovery (Feature 4)."""
 
-import json
-import os
 import uuid
 from unittest.mock import MagicMock, patch
-
-from mcp.server.fastmcp import FastMCP
 
 from labyrinth.drivers.sql.models import (
     ColumnMetadata,
@@ -19,8 +15,6 @@ from labyrinth.graph.edges.writes_edge import WritesEdge
 from labyrinth.graph.graph_models import NodeMetadataKey
 from labyrinth.graph.loaders.postgres.onprem_postgres_loader import OnPremPostgresLoader
 from labyrinth.graph.sinks.json_file_sink import classify_node
-from labyrinth.mcp.graph_store import GraphStore
-from labyrinth.mcp.tools.security import register
 
 NK = NodeMetadataKey
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
@@ -51,22 +45,6 @@ def _load_with_mock(roles=None, grants=None):
         mock_get.return_value = _build_mock_driver(roles, grants)
         loader = OnPremPostgresLoader(organization_id=ORG_ID, resource=RESOURCE)
         return loader.load(RESOURCE)
-
-
-def _get_tool(store, tool_name):
-    mcp = FastMCP("test")
-    register(mcp, store)
-    return mcp._tool_manager._tools[tool_name].fn
-
-
-def _write_graph(tmp_path, nodes, edges):
-    path = os.path.join(str(tmp_path), "graph.json")
-    with open(path, "w") as f:
-        json.dump({
-            "generated_at": "2024-01-01", "node_count": len(nodes),
-            "edge_count": len(edges), "nodes": nodes, "edges": edges,
-        }, f)
-    return path
 
 
 # ── Role node tests ──────────────────────────────────────────────────
@@ -192,64 +170,3 @@ class TestIntegration:
         assert str(grant_edges[0].to_urn) == str(table_nodes[0].urn)
 
 
-# ── MCP tool test ─────────────────────────────────────────────────────
-
-
-class TestMCPDatabasePermissions:
-    def test_find_database_permissions_by_table(self, tmp_path):
-        org = str(ORG_ID)
-        role_urn = "urn:onprem:postgres:db:5432:mydb/roles/reader"
-        table_urn = "urn:onprem:postgres:db:5432:mydb/public/users"
-
-        nodes = [
-            {"urn": role_urn, "organization_id": org, "parent_urn": None,
-             "node_type": "db_role",
-             "metadata": {"role_name": "reader", "role_login": True, "role_superuser": False}},
-            {"urn": table_urn, "organization_id": org, "parent_urn": None,
-             "node_type": "table",
-             "metadata": {"table_name": "users"}},
-        ]
-        edges = [{
-            "uuid": str(uuid.uuid4()),
-            "organization_id": org,
-            "from_urn": role_urn,
-            "to_urn": table_urn,
-            "edge_type": "reads",
-            "metadata": {"privilege": "SELECT"},
-        }]
-
-        path = _write_graph(tmp_path, nodes, edges)
-        store = GraphStore(path)
-        fn = _get_tool(store, "find_database_permissions")
-        result = fn(table_name="users", role_name="")
-        assert "reader" in result
-        assert "SELECT" in result
-
-    def test_find_database_permissions_by_role(self, tmp_path):
-        org = str(ORG_ID)
-        role_urn = "urn:onprem:postgres:db:5432:mydb/roles/admin"
-        table_urn = "urn:onprem:postgres:db:5432:mydb/public/users"
-
-        nodes = [
-            {"urn": role_urn, "organization_id": org, "parent_urn": None,
-             "node_type": "db_role",
-             "metadata": {"role_name": "admin", "role_login": True, "role_superuser": True}},
-            {"urn": table_urn, "organization_id": org, "parent_urn": None,
-             "node_type": "table",
-             "metadata": {"table_name": "users"}},
-        ]
-        edges = [{
-            "uuid": str(uuid.uuid4()),
-            "organization_id": org,
-            "from_urn": role_urn,
-            "to_urn": table_urn,
-            "edge_type": "reads",
-            "metadata": {"privilege": "ALL"},
-        }]
-
-        path = _write_graph(tmp_path, nodes, edges)
-        store = GraphStore(path)
-        fn = _get_tool(store, "find_database_permissions")
-        result = fn(table_name="", role_name="admin")
-        assert "admin" in result
-        assert "SUPERUSER" in result

@@ -4,7 +4,6 @@ import aiohttp
 import boto3
 from fastapi import FastAPI
 from fastapi.responses import Response
-
 from s3_wrapper import S3Wrapper
 
 app = FastAPI(title="labyrinth-testapp")

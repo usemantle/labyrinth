@@ -1,19 +1,12 @@
 """Unit tests for the UV lockfile plugin."""
 
-import json
-import os
 import uuid
 from unittest.mock import patch
-
-from mcp.server.fastmcp import FastMCP
 
 from labyrinth.graph.graph_models import NodeMetadataKey, NodeType
 from labyrinth.graph.loaders.codebase.cve.osv_client import OsvResult
 from labyrinth.graph.loaders.codebase.filesystem_codebase_loader import FileSystemCodebaseLoader
 from labyrinth.graph.loaders.codebase.plugins import UvPlugin
-from labyrinth.graph.sinks.json_file_sink import classify_node
-from labyrinth.mcp.graph_store import GraphStore
-from labyrinth.mcp.tools.security import register
 
 ORG_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 NK = NodeMetadataKey
@@ -290,59 +283,3 @@ def test_no_transitive_edges_without_dependencies(mock_osv, tmp_path):
     assert all(e.from_urn == manifest.urn for e in dep_edges)
 
 
-@patch("labyrinth.graph.loaders.codebase.plugins.uv_plugin.query_osv")
-def test_transitive_cve_reachable_via_blast_radius(mock_osv, tmp_path):
-    """blast_radius from a file importing python-jose reaches cryptography's CVE."""
-    def osv_side_effect(name, version, ecosystem):
-        if name == "cryptography":
-            return OsvResult(cve_ids=["CVE-2026-26007"])
-        return OsvResult()
-
-    mock_osv.side_effect = osv_side_effect
-    repo = _make_repo(tmp_path, lock_content=LOCK_WITH_DEPS)
-    nodes, edges = _load(repo)
-
-    # Serialize to JSON and load into GraphStore
-    graph_path = os.path.join(str(tmp_path), "graph.json")
-    graph_data = {
-        "generated_at": "2024-01-01T00:00:00Z",
-        "node_count": len(nodes),
-        "edge_count": len(edges),
-        "nodes": [
-            {
-                "urn": str(n.urn),
-                "organization_id": str(n.organization_id),
-                "parent_urn": str(n.parent_urn) if n.parent_urn else None,
-                "node_type": classify_node(n),
-                "metadata": dict(n.metadata.items()),
-            }
-            for n in nodes
-        ],
-        "edges": [
-            {
-                "uuid": str(e.uuid),
-                "organization_id": str(e.organization_id),
-                "from_urn": str(e.from_urn),
-                "to_urn": str(e.to_urn),
-                "edge_type": e.edge_type,
-                "metadata": dict(e.metadata.items()),
-            }
-            for e in edges
-        ],
-        "soft_links": [],
-    }
-    with open(graph_path, "w") as f:
-        json.dump(graph_data, f)
-
-    store = GraphStore(graph_path)
-    mcp = FastMCP("test")
-    register(mcp, store)
-    blast_fn = mcp._tool_manager._tools["blast_radius"].fn
-
-    # Find the python-jose dep node URN
-    jose = _find_dep(nodes, "python-jose")
-    result = blast_fn(urn=str(jose.urn), max_depth=5)
-
-    assert "cryptography" in result
-    assert "CVE-2026-26007" in result
-    assert "CVE-affected dependencies: 1" in result
